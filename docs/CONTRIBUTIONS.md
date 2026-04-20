@@ -175,6 +175,7 @@ After forking:
    ```
 
 7. **Submit a pull request**
+
    Open a PR on GitHub with a detailed description and link to relevant issues. **When you create a PR, make sure you create a PR selecting the branch of the upstream repository you'd like to merge changes into (usually urban-toolkit/curio main).**
 
 ## Running Tests

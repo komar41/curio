@@ -62,6 +62,7 @@ _node_type_registry: dict = {
     "CONSTANTS":             {"inputTypes": [],                                                   "outputTypes": ["VALUE"]},
     "DATA_POOL":             {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
     "MERGE_FLOW":            {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"], "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
+    "DATA_SUMMARY":          {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["JSON"]},
 }
 
 def get_output_types(node_type: str) -> list:
