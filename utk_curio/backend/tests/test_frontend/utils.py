@@ -73,15 +73,17 @@ def get_shared_data_dir() -> str:
 # ---------------------------------------------------------------------------
 
 def load_artifact_as_dict(artifact_id: str) -> dict:
-    """Load a DuckDB artifact and return it in the ``{dataType, data}`` dict
-    shape produced by ``parseOutput``.
-
-    Drop-in replacement for the old ``load_dot_data(path)`` — same shape of
+    """Drop-in replacement for the old ``load_dot_data(path)`` — same shape of
     return value, just sourced from the ``artifacts`` table instead of a
     zlib-compressed ``.data`` file.
     """
     from utk_curio.sandbox.util.parsers import load_from_duckdb, parseOutput
-    return parseOutput(load_from_duckdb(artifact_id))
+    parsed = parseOutput(load_from_duckdb(artifact_id))
+    # load_dot_data read a file that had been json.dumps'd at save time, so
+    # its return was always pure Python types (numpy → list, np.int64 → int).
+    # Preserve that invariant — callers compare dicts with ==, which raises
+    # ValueError on numpy arrays.
+    return json.loads(json.dumps(parsed, default=str))
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +423,8 @@ def execute_workflow_programmatically(spec, seed: int = 42) -> dict[str, str]:
             # --- resolve input (mirrors python_wrapper.txt) ---
             upstreams = spec.upstream_nodes(node.id)
             if not upstreams:
-                incoming = ""
+                # incoming = ""
+                incoming = None
             elif len(upstreams) == 1:
                 up = outputs[upstreams[0]]
                 if up.get("dataType") == "outputs":
@@ -432,7 +435,8 @@ def execute_workflow_programmatically(spec, seed: int = 42) -> dict[str, str]:
                 incoming = [load_from_duckdb(outputs[uid]["path"]) for uid in upstreams]
 
             # Validate input shape via a synthetic dict (same trick as the wrapper)
-            if incoming != "":
+            # if incoming != "":
+            if incoming is not None:
                 if isinstance(incoming, list):
                     synthetic_in = {
                         "dataType": "outputs",

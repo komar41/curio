@@ -52,8 +52,11 @@ elif(file_path):
 #     incomingInput = ''
 
 #duckdb input dispatch block:
-incomingInput = ''
-if input != '':
+#incomingInput = ''
+#if input != '':
+
+incomingInput = None
+if input is not None and not (isinstance(input, str) and input == ''):
     if dataType == 'outputs':
         synthetic = {
             'dataType': 'outputs',

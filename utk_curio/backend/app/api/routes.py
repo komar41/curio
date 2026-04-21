@@ -276,6 +276,7 @@ def get_file():
         t0 = time.perf_counter()
         raw = load_from_duckdb(file_name)
         data = parseOutput(raw)
+        data['filename'] = file_name 
         if vega:
             data = transform_to_vega(data)
         print(f"[/get] id={file_name} took={time.perf_counter()-t0:.4f}s", flush=True)
@@ -353,6 +354,7 @@ def get_file_preview():
             raw = raw.head(max_rows)
 
         data = parseOutput(raw)
+        data['filename'] = file_name 
 
         if total_rows is not None:
             data['preview'] = True
@@ -531,10 +533,22 @@ def process_python_code():
                                 )
         
         try:
-            response = response.json()
-            stdout = response['stdout']
-            stderr = response['stderr']
-            output = response['output'] # contains path and dataType
+            try:
+                response_json = response.json()
+            except Exception as e:
+                print(f"[processPythonCode] sandbox /exec returned non-JSON: "
+                  f"status={response.status_code} "
+                  f"body={response.text[:500]!r}", flush=True)
+                return {
+                    'stdout': '',
+                    'stderr': f'Sandbox error: {e}',
+                    'input': input,
+                    'output': {}
+                }, 500
+
+            stdout = response_json['stdout']
+            stderr = response_json['stderr']
+            output = response_json['output'] # contains path and dataType
             print(output, flush=True)
             
             return {'stdout': stdout, 'stderr': stderr, 'input': input, 'output': output}
