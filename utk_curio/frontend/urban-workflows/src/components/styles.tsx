@@ -201,7 +201,7 @@ export const NodeContainer = ({
                 }
 
                 if (nodeHeight == undefined) {
-                    setCurrentNodeHeight(267);
+                    setCurrentNodeHeight(350);
                 } else {
                     setCurrentNodeHeight(nodeHeight);
                 }
@@ -219,7 +219,7 @@ export const NodeContainer = ({
         }
 
         if (nodeHeight == undefined) {
-            setCurrentNodeHeight(267);
+            setCurrentNodeHeight(350);
         }
 
         const resizer = document.getElementById(
@@ -636,12 +636,6 @@ export const NodeContainer = ({
                             onClick={() => updatePin(nodeId, pinnedToDashboard)}
                         />
                         <FontAwesomeIcon
-                            icon={faCircleInfo}
-                            style={{ ...headerIconStyle, ...(data.keywordHighlighted ? {color: "rgb(251, 252, 246)"} : {}) }}
-                            title="Description"
-                            onClick={() => promptDescription()}
-                        />
-                        <FontAwesomeIcon
                             icon={faComments}
                             style={{ ...headerIconStyle, ...(data.keywordHighlighted ? {color: "rgb(251, 252, 246)"} : {}) }}
                             title="Comments"
@@ -971,7 +965,7 @@ export const NodeContainer = ({
                             }
 
                             if (nodeHeight == undefined) {
-                                setCurrentNodeHeight(267);
+                                setCurrentNodeHeight(350);
                             } else {
                                 setCurrentNodeHeight(nodeHeight);
                             }

@@ -163,10 +163,10 @@ async function callLifecycle(
 
 describe('Lifecycle hooks — NodeLifecycleHook contract conformance', () => {
   describe('useCodeNodeLifecycle', () => {
-    test('returns contentComponent only', async () => {
+    test('returns empty lifecycle (output is inline in CodeEditor)', async () => {
       const result = await callLifecycle(useCodeNodeLifecycle);
       assertValidLifecycleResult(result.current);
-      expect(result.current.contentComponent).toBeDefined();
+      expect(result.current.contentComponent).toBeUndefined();
     });
   });
 
