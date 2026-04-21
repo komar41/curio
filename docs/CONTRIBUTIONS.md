@@ -21,6 +21,7 @@ This guide is intended for students who are interested in contributing to an ope
   * [TL;DR](#tldr)
   * [One-Time Setup](#one-time-setup)
   * [Backend and Sandbox Tests](#backend-and-sandbox-tests)
+  * [Frontend Unit Tests](#frontend-unit-tests)
   * [Frontend E2E Tests](#frontend-e2e-tests)
   * [Database Migrations](#database-migrations)
 * [Organizing Contributions](#organizing-contributions)
@@ -217,6 +218,17 @@ playwright install chromium
 pytest utk_curio/backend/tests/
 pytest utk_curio/sandbox/tests/
 ```
+
+### Frontend Unit Tests
+
+The frontend uses Jest and React Testing Library for component and TypeScript unit tests.
+
+```bash
+cd utk_curio/frontend/urban-workflows
+npm test -- --watchAll=false
+```
+
+Tests live under `src/tests/` and mirror the structure of `src/components/`. See [utk_curio/frontend/urban-workflows/src/tests/README.md](../utk_curio/frontend/urban-workflows/src/tests/README.md) for guidelines on writing and organizing tests.
 
 ### Frontend E2E Tests
 

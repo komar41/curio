@@ -12,7 +12,7 @@
 #   --headed            Open a visible browser window during E2E tests
 #   --workflows A,B     Run only the named workflow files (e.g. Vega.json,UTK.json)
 #   --e2e-only          Skip unit tests; run only the E2E suite
-#   --unit-only         Skip E2E tests; run only backend and sandbox unit tests
+#   --unit-only         Skip E2E tests; run only backend, sandbox, and frontend unit tests
 
 set -uo pipefail
 
@@ -135,6 +135,11 @@ if [[ $E2E_ONLY -eq 0 ]]; then
   PYTHONPATH="$REPO_ROOT" python -m unittest discover \
     -s "$REPO_ROOT/utk_curio/sandbox/tests" -t "$REPO_ROOT" -p "test_*.py" -v
   record "Sandbox unit tests" $?
+
+  echo ""
+  echo "==> Running Jest frontend unit tests..."
+  (cd "$REPO_ROOT/utk_curio/frontend/urban-workflows" && npm test -- --watchAll=false)
+  record "Jest frontend unit tests" $?
 fi
 
 # ---------------------------------------------------------------------------

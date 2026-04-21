@@ -40,6 +40,10 @@ jest.mock('../../../providers/FlowProvider', () => ({
   useFlowContext: () => ({ workflowNameRef: { current: 'test-workflow' } }),
 }));
 
+jest.mock('../../../providers/ToastProvider', () => ({
+  useToastContext: () => ({ showToast: jest.fn() }),
+}));
+
 jest.mock('../../../services/api', () => ({
   fetchData: jest.fn().mockResolvedValue({ data: {}, dataType: 'dataframe' }),
 }));
