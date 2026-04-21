@@ -28,6 +28,7 @@ import { TrillGenerator } from "../TrillGenerator";
 import { applyDashboardLayout } from "../utils/dashboardLayout";
 import { ensureMergeArrays, parseHandleIndex, setMergeSlot, clearMergeSlot } from "../utils/mergeFlowUtils";
 import { useWorkflowOperations } from "../hook/useWorkflowOperations";
+import { useToastContext } from "./ToastProvider";
 
 
 export interface IOutput {
@@ -140,6 +141,7 @@ export const FlowContext = createContext<FlowContextProps>({
 });
 
 const FlowProvider = ({ children }: { children: ReactNode }) => {
+    const { showToast } = useToastContext();
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [outputs, setOutputs] = useState<IOutput[]>([]);
@@ -446,21 +448,21 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 (isInOutHandle(connection.targetHandle) && !isInOutHandle(connection.sourceHandle))
             ) {
                 validHandleCombination = false;
-                alert("An in/out connection can only be connected to another in/out connection");
+                showToast("An in/out connection can only be connected to another in/out connection", "warning");
             }
             else if (
                 (isInHandle(connection.sourceHandle) && connection.targetHandle !== "out") ||
                 (isInHandle(connection.targetHandle) && connection.sourceHandle !== "out")
             ) {
                 validHandleCombination = false;
-                alert("An in connection can only be connected to an out connection");
+                showToast("An in connection can only be connected to an out connection", "warning");
             }
             else if (
                 (connection.sourceHandle === "out" && !isInHandle(connection.targetHandle)) ||
                 (connection.targetHandle === "out" && !isInHandle(connection.sourceHandle))
             ) {
                 validHandleCombination = false;
-                alert("An out connection can only be connected to an in connection");
+                showToast("An out connection can only be connected to an in connection", "warning");
             }
 
 
@@ -485,7 +487,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 );
 
                 if (!allowConnection) {
-                    alert("Input and output types of these boxes are not compatible");
+                    showToast("Input and output types of these boxes are not compatible", "warning");
                 }
 
                 if (inNodeType === NodeType.MERGE_FLOW && allowConnection) {
@@ -501,10 +503,10 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
 
 
                     if (usedHandles.size > 7) {
-                        alert("Connection Limit Reached!\n\nMerge nodes can only accept up to 7 input connections.");
+                        showToast("Connection limit reached. Merge nodes can only accept up to 7 input connections.", "warning");
                         allowConnection = false;
                     } else if (usedHandles.has(connection.targetHandle)) {
-                        alert("This input already has a connection.\n\nEach input handle can only accept one connection.");
+                        showToast("This input already has a connection. Each input handle can only accept one connection.", "warning");
                         allowConnection = false;
                     }
                 }
@@ -512,12 +514,12 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
 
                 // Checking cycles
                 if (target.id === connection.source) {
-                    alert("Cycles are not allowed");
+                    showToast("Cycles are not allowed in the dataflow", "warning");
                     allowConnection = false;
                 }
 
                 if (connection.sourceHandle != "in/out" && hasCycle(target)) {
-                    alert("Cycles are not allowed");
+                    showToast("Cycles are not allowed in the dataflow", "warning");
                     allowConnection = false;
                 }
 

@@ -11,6 +11,7 @@ import ReactFlow, {
 } from "reactflow";
 
 import { useFlowContext } from "../providers/FlowProvider";
+import { useToastContext } from "../providers/ToastProvider";
 import { NodeType, EdgeType } from "../constants";
 import { getAllNodeTypes } from "../registry";
 import UniversalNode from "./UniversalNode";
@@ -34,6 +35,7 @@ import FloatingPanel from "./FloatingPanel";
 import WorkflowGoal from "./menus/top/WorkflowGoal";
 
 export function MainCanvas() {
+    const { showToast } = useToastContext();
     const {
         nodes,
         edges,
@@ -339,8 +341,9 @@ export function MainCanvas() {
                                     edge.source == change.id ||
                                     edge.target == change.id
                                 ) {
-                                    alert(
-                                        "Connected boxes cannot be removed. Remove the edges first by selecting it and pressing backspace."
+                                    showToast(
+                                        "Connected boxes cannot be removed. Remove the edges first by selecting it and pressing backspace.",
+                                        "warning"
                                     );
                                     allowed = false;
                                     break;

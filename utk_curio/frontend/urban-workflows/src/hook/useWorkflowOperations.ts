@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { Node, Edge, NodeChange, NodeRemoveChange, Connection, useReactFlow } from "reactflow";
 import { useProvenanceContext } from "../providers/ProvenanceProvider";
+import { useToastContext } from "../providers/ToastProvider";
 import { updateNodeData, updateNodesByMap, updateEdgesByMap, extractNodeFieldMap, extractKeywordMaps } from "../utils/flowNodeUtils";
 import { TrillGenerator } from "../TrillGenerator";
 
@@ -46,6 +47,7 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
 
     const reactFlow = useReactFlow();
     const { newNode, addWorkflow } = useProvenanceContext();
+    const { showToast } = useToastContext();
 
     // fitViewOnLoad is internal to workflow loading
     const [fitViewOnLoad, setFitViewOnLoad] = useState(false);
@@ -229,8 +231,9 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
                     edge.source == change.id ||
                     edge.target == change.id
                 ) {
-                    alert(
-                        "Connected boxes cannot be removed. Remove the edges first by selecting it and pressing backspace."
+                    showToast(
+                        "Connected boxes cannot be removed. Remove the edges first by selecting it and pressing backspace.",
+                        "warning"
                     );
                     allowed = false;
                     break;

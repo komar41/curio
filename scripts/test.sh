@@ -56,14 +56,14 @@ record() {
 wait_for_port() {
   local name=$1 port=$2
   echo "==> Waiting for $name on port $port..."
-  for _ in $(seq 60); do
+  for _ in $(seq 240); do
     if python -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('localhost', $port)); s.close()" 2>/dev/null; then
       echo "    $name is ready."
       return
     fi
     sleep 1
   done
-  echo "ERROR: $name (port $port) did not start within 60 s" >&2
+  echo "ERROR: $name (port $port) did not start within 240 s" >&2
   exit 1
 }
 
@@ -93,7 +93,18 @@ cleanup() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Start Curio services (backend :5002, sandbox :2000, frontend :8080)
+# 1. Clean all build artifacts and runtime data
+# ---------------------------------------------------------------------------
+bash "$REPO_ROOT/scripts/clean.sh"
+
+# ---------------------------------------------------------------------------
+# 2. Install dependencies (needed by both unit tests and E2E)
+# ---------------------------------------------------------------------------
+echo "==> Installing Python dependencies..."
+pip install -r "$REPO_ROOT/requirements.txt" -q
+
+# ---------------------------------------------------------------------------
+# 3. Start Curio services (backend :5002, sandbox :2000, frontend :8080)
 # ---------------------------------------------------------------------------
 if [[ $USE_EXISTING -eq 0 ]]; then
   echo "==> Starting Curio services..."
@@ -109,13 +120,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Install dependencies (needed by both unit tests and E2E)
-# ---------------------------------------------------------------------------
-echo "==> Installing Python dependencies..."
-pip install -r "$REPO_ROOT/requirements.txt" -q
-
-# ---------------------------------------------------------------------------
-# 3. Backend and sandbox unit tests
+# 4. Backend and sandbox unit tests
 # ---------------------------------------------------------------------------
 if [[ $E2E_ONLY -eq 0 ]]; then
   echo ""
@@ -133,7 +138,7 @@ if [[ $E2E_ONLY -eq 0 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. E2E tests (Playwright on host, pointing at the running services)
+# 5. E2E tests (Playwright on host, pointing at the running services)
 # ---------------------------------------------------------------------------
 if [[ $UNIT_ONLY -eq 0 ]]; then
   echo ""

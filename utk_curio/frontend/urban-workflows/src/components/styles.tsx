@@ -16,6 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useUserContext } from "../providers/UserProvider";
 import { useLLMContext } from "../providers/LLMProvider";
+import { useToastContext } from "../providers/ToastProvider";
 import { ConnectionValidator } from "../ConnectionValidator";
 import Col from "react-bootstrap/Col";
 import Nav from "react-bootstrap/Nav";
@@ -102,11 +103,12 @@ export const NodeContainer = ({
     isLoading?: boolean;
     handleType?: string;
 }) => {
-    const { 
-        nodes, 
-        edges, 
-        workflowNameRef, 
-        applyRemoveChanges, 
+    const { showToast } = useToastContext();
+    const {
+        nodes,
+        edges,
+        workflowNameRef,
+        applyRemoveChanges,
         setPinForDashboard,
         allMinimized,
         setExpandStatus,
@@ -285,7 +287,7 @@ export const NodeContainer = ({
             updateDataGoal(new_subtask);
         } catch (error) {
             console.error("Error communicating with LLM", error);
-            alert("Error communicating with LLM");
+            showToast("Error communicating with LLM", "error");
         }
     }
 
@@ -383,7 +385,7 @@ export const NodeContainer = ({
             loadTrill(parsed_result, "connection");
         } catch (error) {
             console.error("Error communicating with LLM", error);
-            alert("Error communicating with LLM");
+            showToast("Error communicating with LLM", "error");
         }
 
     }
@@ -415,7 +417,7 @@ export const NodeContainer = ({
 
             } catch (error) {
                 console.error("Error communicating with LLM", error);
-                alert("Error communicating with LLM");
+                showToast("Error communicating with LLM", "error");
             }
         }
 
