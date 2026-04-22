@@ -3,11 +3,20 @@ import re
 import json
 import time
 
+# from .utils import (
+    # save_workflow_test_screenshot,
+    # get_shared_data_dir,
+    # load_dot_data,
+    # strip_volatile_keys,
+    # execute_workflow_programmatically,
+    # dot_data_to_vega_values,
+    # save_expected_svg,
+    # compare_svg_structure,
+# )
 from .utils import (
     save_workflow_test_screenshot,
     get_shared_data_dir,
-    load_dot_data,
-    strip_volatile_keys,
+    load_artifact_as_dict,
     execute_workflow_programmatically,
     dot_data_to_vega_values,
     save_expected_svg,
