@@ -4,6 +4,7 @@ import ReactFlow, {
     Background,
     BackgroundVariant,
     ConnectionMode,
+    Controls,
     Edge,
     EdgeChange,
     NodeChange,
@@ -444,6 +445,7 @@ export function MainCanvas() {
                 translateExtent={CANVAS_EXTENT}
             >
                 <Background color="#a0a0a0" variant={BackgroundVariant.Dots} gap={20} size={2} />
+                <Controls />
                 {AIModeRef.current ? <WorkflowGoal /> : null}
                 {AIModeRef.current ? <LLMChat /> : null}
             </ReactFlow>

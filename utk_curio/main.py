@@ -218,7 +218,8 @@ def force_rebuild_frontend():
     check_install_build("frontend/utk-workflow/src/utk-ts", force_rebuild=True)
     log_info(f"[Frontend] Force rebuild complete.", COLOR_FRONTEND, 0)
 
-def start_frontend(force_rebuild=False, no_server=False):
+def start_frontend(host="localhost", port=8080, force_rebuild=False, no_server=False):
+    log_info(f"Starting frontend on {host}:{port}...", COLOR_FRONTEND, 0)
 
     # Only check if running dev mode
     original_dir = os.getcwd()
@@ -275,7 +276,7 @@ def start_frontend(force_rebuild=False, no_server=False):
                     "-c",
                     (
                         "from utk_curio.main import run_spa_static_server; "
-                        "run_spa_static_server('dist', 8080)"
+                        f"run_spa_static_server('dist', {port})"
                     ),
                 ],
                 stdout=subprocess.PIPE,
@@ -306,7 +307,7 @@ def start_frontend(force_rebuild=False, no_server=False):
         log_error(f"[Frontend] Unexpected Error: {str(e)}")
         clean_shutdown()
 
-    log_info(f"[Frontend] Frontend server started successfully.", COLOR_FRONTEND, 0)
+    log_info(f"[Frontend] Frontend server started successfully on {host}:{port}.", COLOR_FRONTEND, 0)
     os.chdir(original_dir)
     return process
 
@@ -372,7 +373,7 @@ def prepare_backend_database(force=False):
                         pass
 
             subprocess.run(
-                ["python", "backend/create_provenance_db.py", os.path.abspath(db_file)],
+                [sys.executable, "backend/create_provenance_db.py", os.path.abspath(db_file)],
                 cwd=script_dir, check=True, env=env,
             )
 
@@ -410,7 +411,7 @@ def start_backend(host, port, force_db_init=False, no_server=False):
     env = {**os.environ, "PYTHONPATH": project_root + os.pathsep + env.get("PYTHONPATH", "")}
 
     process = subprocess.Popen(
-        ["python", "-u", "-m", "backend.server"],
+        [sys.executable, "-u", "-m", "backend.server"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -431,7 +432,7 @@ def start_sandbox(host, port):
     env = {**os.environ, "PYTHONPATH": project_root + os.pathsep + env.get("PYTHONPATH", "")}
 
     process = subprocess.Popen(
-        ["python", "-u", "-m", "sandbox.server"],
+        [sys.executable, "-u", "-m", "sandbox.server"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -537,6 +538,12 @@ def main():
         "--sandbox-port", default="2000", help="Port for the sandbox server (default: 2000)"
     )
     parser.add_argument(
+        "--frontend-host", default="localhost", help="Host for the frontend server (default: localhost)"
+    )
+    parser.add_argument(
+        "--frontend-port", default="8080", help="Port for the frontend server (default: 8080)"
+    )
+    parser.add_argument(
         "--verbose", type=int, default=1, help="Verbosity level (e.g., 0=silent, 1=normal, 2=debug)"
     )
     parser.add_argument(
@@ -593,7 +600,7 @@ def main():
         if not args.command:
             if args.force_rebuild:
                 log_info("Rebuilding frontend...", COLOR_FRONTEND, 0)
-                start_frontend(force_rebuild=True, no_server=True)
+                start_frontend(args.frontend_host, int(args.frontend_port), force_rebuild=True, no_server=True)
             if args.force_db_init:
                 log_info("Re-initializing backend database...", COLOR_FRONTEND, 0)
                 start_backend(args.backend_host, args.backend_port, force_db_init=True, no_server=True)
@@ -622,7 +629,7 @@ def main():
             processes = [
                 start_backend(args.backend_host, args.backend_port, force_db_init=args.force_db_init),
                 start_sandbox(args.sandbox_host, args.sandbox_port),
-                start_frontend(force_rebuild=args.force_rebuild)
+                start_frontend(args.frontend_host, int(args.frontend_port), force_rebuild=args.force_rebuild)
             ]
         else:
             if args.server == "backend":
@@ -631,7 +638,7 @@ def main():
                 ensure_utk_installed()
                 processes.append(start_sandbox(args.sandbox_host, args.sandbox_port))
             elif args.server == "frontend":
-                processes.append(start_frontend(force_rebuild=args.force_rebuild))
+                processes.append(start_frontend(args.frontend_host, int(args.frontend_port), force_rebuild=args.force_rebuild))
 
         # Monitor the threads
         logging_thread = threading.Thread(target=logger, daemon=True)
