@@ -110,6 +110,19 @@ export function MainCanvas() {
     const reactFlow = useReactFlow();
     const {getZoom, getViewport, setViewport, setCenter, screenToFlowPosition} = useReactFlow();
 
+    // Test hook: expose the ReactFlow instance so Playwright can force a
+    // deterministic viewport (e.g. fitView with duration: 0) before taking
+    // screenshots. Kept unconditional — read-only from the outside and
+    // cheap — so e2e tests don't need a separate build flag.
+    useEffect(() => {
+        (window as any).__curio_reactFlow = reactFlow;
+        return () => {
+            if ((window as any).__curio_reactFlow === reactFlow) {
+                delete (window as any).__curio_reactFlow;
+            }
+        };
+    }, [reactFlow]);
+
     const {
         setDashBoardMode,
         updatePositionWorkflow,

@@ -11,7 +11,8 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 
 import allure
-from playwright.sync_api import Page, expect
+import pytest
+from playwright.sync_api import Error as PlaywrightError, Page, expect
 
 # Repo root is 4 levels up: test_frontend -> tests -> backend -> utk_curio -> curio-main
 REPO_ROOT = os.path.abspath(
@@ -125,6 +126,36 @@ def resolve_widget_placeholders(code: str) -> str:
 PLAYWRIGHT_EXPECTED_DIR = os.path.join(
     REPO_ROOT, ".curio", "playwright", "expected"
 )
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in _TRUE_VALUES:
+        return True
+    if value in _FALSE_VALUES:
+        return False
+    return default
+
+
+def auth_enabled_env() -> bool:
+    return env_flag("ENABLE_USER_AUTH", True)
+
+
+def allow_guest_login_env() -> bool:
+    if "ALLOW_GUEST_LOGIN" in os.environ:
+        return env_flag("ALLOW_GUEST_LOGIN", False)
+    return os.environ.get("CURIO_ENV", "dev") != "prod"
+
+
+def require_user_auth() -> None:
+    if not auth_enabled_env():
+        pytest.skip("This test requires ENABLE_USER_AUTH=true")
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +518,69 @@ def execute_workflow_programmatically(spec, seed: int = 42) -> dict[str, str]:
     return expected
 
 
+def _wait_for_reactflow_ready(
+    page: Page,
+    *,
+    padding: float = 0.2,
+    stable_frames: int = 3,
+    timeout_ms: int = 10000,
+) -> None:
+    """Force ReactFlow into a deterministic viewport before screenshotting.
+
+    Without this, ``save_workflow_test_screenshot`` races the app-side
+    ``fitView`` call in ``useWorkflowOperations`` (which runs on a
+    ``setTimeout`` after the workflow is uploaded). The screenshot can
+    fire before the transform has been applied, producing a pre-fit
+    canvas where nodes overflow the viewport.
+
+    Strategy:
+
+    1. Wait until at least one ``.react-flow__node`` is on the page.
+    2. Call ``fitView({ padding, duration: 0 })`` on the instance
+       exposed at ``window.__curio_reactFlow`` (see ``MainCanvas.tsx``).
+       ``duration: 0`` skips the ReactFlow animation so the transform
+       is applied synchronously.
+    3. Poll the ``.react-flow__viewport`` ``transform`` attribute until
+       it has stayed identical for ``stable_frames`` consecutive reads
+       (guards against Monaco's layout settling and any late
+       node-size measurements from ReactFlow).
+    """
+    page.wait_for_function(
+        "() => document.querySelectorAll('.react-flow__node').length > 0",
+        timeout=timeout_ms,
+    )
+
+    page.evaluate(
+        """(padding) => {
+            const rf = window.__curio_reactFlow;
+            if (rf && typeof rf.fitView === 'function') {
+                //rf.setViewport({ x: 0, y: 0, zoom: 0.35 }, { duration: 0 })
+                rf.fitView({ padding, duration: 0, includeHiddenNodes: true });
+            }
+        }""",
+        padding,
+    )
+
+    page.wait_for_function(
+        """(stable_frames) => {
+            const vp = document.querySelector('.react-flow__viewport');
+            if (!vp) return false;
+            const current = vp.style.transform || '';
+            if (!current) return false;
+            window.__curio_vp_samples = window.__curio_vp_samples || [];
+            const samples = window.__curio_vp_samples;
+            samples.push(current);
+            if (samples.length > stable_frames) samples.shift();
+            if (samples.length < stable_frames) return false;
+            return samples.every((s) => s === samples[0]);
+        }""",
+        arg=stable_frames,
+        timeout=timeout_ms,
+    )
+
+    page.evaluate("delete window.__curio_vp_samples")
+
+
 def _capture_full_page(page: Page):
     """Return a Pillow RGB image of the full scrollable page.
 
@@ -539,6 +633,11 @@ def save_workflow_test_screenshot(
     os.makedirs(WORKFLOW_SCREENSHOT_EXPECTED_DIR, exist_ok=True)
     filename = f"screenshot_{stem}_{test_name}.png"
     expected_path = os.path.join(WORKFLOW_SCREENSHOT_EXPECTED_DIR, filename)
+
+    # Pin the ReactFlow viewport to a deterministic fitView before any
+    # capture, so baselines and subsequent comparisons share the same
+    # zoom/pan regardless of when the in-app setTimeout(fitView) fires.
+    _wait_for_reactflow_ready(page)
 
     if not os.path.isfile(expected_path):
         _capture_full_page(page).save(expected_path)
@@ -696,14 +795,207 @@ def base_url(servers: dict, port_key: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Reusable auth + canvas-entry helpers
+#
+# Every workflow/project E2E test needs the same bootstrap: sign up a fresh
+# user, land on /projects, then open a new empty workflow canvas. These
+# helpers centralise that choreography so individual tests (and the class
+# scoped ``loaded_workflow`` fixture) stay focused on their actual assertions.
+# ---------------------------------------------------------------------------
+
+DEFAULT_TEST_PASSWORD = "testpass123"
+
+
+def signup_e2e_user(
+    page,
+    base_url: str,
+    *,
+    name: str,
+    username: str,
+    password: str = DEFAULT_TEST_PASSWORD,
+) -> None:
+    """Sign up a fresh user via the ``/auth/signup`` form.
+
+    Waits until the sign-up flow has redirected to ``/projects`` so callers
+    can immediately interact with the authenticated UI.
+    """
+    require_user_auth()
+    page.goto(f"{base_url}/auth/signup")
+    page.wait_for_load_state("domcontentloaded")
+    page.get_by_text("Create an account").wait_for(timeout=30000)
+    page.get_by_label("Name", exact=True).fill(name)
+    page.get_by_label("Username").fill(username)
+    page.get_by_label("Password", exact=True).fill(password)
+    page.get_by_label("Confirm Password").fill(password)
+    page.get_by_role("button", name="Create Account").click()
+    page.wait_for_url("**/projects", timeout=30000)
+
+
+def open_new_workflow(page) -> None:
+    """From ``/projects``, click "+ New Dataflow" and wait for the canvas."""
+    page.get_by_text("+ New Dataflow").click()
+    page.wait_for_url("**/dataflow/**", timeout=15000)
+    page.wait_for_load_state("domcontentloaded")
+
+
+def signup_and_enter_new_workflow(
+    page,
+    base_url: str,
+    *,
+    name: str,
+    username: str,
+    password: str = DEFAULT_TEST_PASSWORD,
+) -> None:
+    """Sign up a user and navigate to a fresh empty dataflow canvas."""
+    signup_e2e_user(
+        page, base_url, name=name, username=username, password=password,
+    )
+    open_new_workflow(page)
+
+
+# ---------------------------------------------------------------------------
+# DB stubs for Playwright — the browser does not drive the signup form.
+#
+# ``/api/testing/stub-login`` creates or fetches a user and returns a fresh
+# session token, which we install as the ``session_token`` cookie on the
+# Playwright context. ``/api/testing/stub-project`` seeds a workflow row
+# owned by that user so ``/projects`` has something to render. Both endpoints
+# require ``CURIO_TESTING=1``; see ``backend/app/testing/routes.py``.
+# ---------------------------------------------------------------------------
+
+SESSION_COOKIE_NAME = "session_token"
+
+
+def _post_json(url: str, payload: dict, timeout: float = 10.0) -> dict:
+    """POST *payload* as JSON to *url* and return the parsed JSON body.
+
+    Uses ``urllib`` (stdlib only) to match the rest of this module instead
+    of introducing a ``requests`` dependency.
+    """
+    data = json.dumps(payload).encode("utf-8")
+    req = Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(req, timeout=timeout) as resp:  # noqa: S310 (trusted local URL)
+        body = resp.read().decode("utf-8") or "{}"
+        return json.loads(body)
+
+
+def install_session_cookie(page, frontend_url: str, token: str) -> None:
+    """Install *token* as the ``session_token`` cookie on *page*'s context.
+
+    Mirrors what ``setToken`` does in ``utils/authApi.ts`` (``js-cookie``
+    defaults: path=/``, host-only, no ``Secure`` on http). Playwright derives
+    the domain from ``url`` when neither ``domain`` nor ``path`` is set, so
+    the SPA's ``Cookies.get("session_token")`` finds the same value.
+    """
+    page.context.add_cookies(
+        [
+            {
+                "name": SESSION_COOKIE_NAME,
+                "value": token,
+                "url": frontend_url,
+            }
+        ]
+    )
+
+
+def stub_db_login(
+    page,
+    frontend_url: str,
+    backend_url: str,
+    *,
+    username: str,
+    name: str,
+    password: str = DEFAULT_TEST_PASSWORD,
+    email: str | None = None,
+    project_name: str | None = None,
+    project_spec: dict | None = None,
+) -> dict:
+    """DB stub helper for Curio E2E tests.
+
+    Creates (or re-uses) *username* directly via ``/api/testing/stub-login``,
+    installs the returned session token as the browser cookie, and — when
+    ``project_name`` is provided — seeds a workflow row owned by that user
+    via ``/api/testing/stub-project`` so the ``/projects`` list page has
+    content to render.
+
+    Returns the parsed ``stub-login`` JSON (``{user, token, created}``),
+    augmented with ``project`` when one was stubbed.
+    """
+    payload = {"username": username, "name": name, "password": password}
+    if email is not None:
+        payload["email"] = email
+    login = _post_json(f"{backend_url}/api/testing/stub-login", payload)
+    install_session_cookie(page, frontend_url, login["token"])
+
+    if project_name is not None:
+        project_payload: dict = {"username": username, "name": project_name}
+        if project_spec is not None:
+            project_payload["spec"] = project_spec
+        project = _post_json(
+            f"{backend_url}/api/testing/stub-project", project_payload,
+        )
+        login["project"] = project
+    return login
+
+
+def stub_login_and_enter_workflow(
+    page,
+    frontend_url: str,
+    backend_url: str,
+    *,
+    username: str,
+    name: str,
+    password: str = DEFAULT_TEST_PASSWORD,
+    project_name: str = "StubbedDataflow",
+    project_spec: dict | None = None,
+) -> dict:
+    """DB-stubbed fast-path into an empty dataflow canvas.
+
+    Creates the user + an empty project directly via
+    ``/api/testing/stub-login`` and ``/api/testing/stub-project``, installs
+    the session cookie on the Playwright context, and navigates straight to
+    ``/dataflow/<project_id>`` — **no UI interaction**. Returns the full
+    ``stub_db_login`` payload (``{user, token, created, project}``).
+
+    This skips both the signup form and the "+ New Dataflow" click on
+    ``/projects`` so the class-scoped ``loaded_workflow`` fixture spends its
+    warm-up time on the actual workflow upload instead of UI plumbing.
+    """
+    result = stub_db_login(
+        page,
+        frontend_url=frontend_url,
+        backend_url=backend_url,
+        username=username,
+        name=name,
+        password=password,
+        project_name=project_name,
+        project_spec=project_spec,
+    )
+    project_id = result["project"]["id"]
+    page.goto(f"{frontend_url}/dataflow/{project_id}")
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url(f"**/dataflow/{project_id}", timeout=15000)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Reusable upload helper
 # ---------------------------------------------------------------------------
 
 def upload_workflow(
     page, app_frontend, workflow_file: str, expected_node_count: int
 ):
-    """Navigate to the app, open the File menu, upload a workflow JSON,
-    and wait until the expected number of nodes appear on the canvas."""
+    """Open the File menu on the current workflow canvas, upload a workflow
+    JSON and wait until the expected number of nodes render.
+
+    The caller is expected to have already navigated ``page`` to a
+    ``/dataflow/...`` route (e.g. via ``signup_and_enter_new_workflow``).
+    """
     debug_log(
         "fixtures.py:upload_workflow",
         "upload_workflow called",
@@ -717,30 +1009,35 @@ def upload_workflow(
         },
         "H1,H2,H3",
     )
-    app_frontend.goto_page("/")
     page.wait_for_load_state("domcontentloaded")
 
-    # Open the File dropdown in the menu bar
+    plug = page.locator("#plug-loader")
+    try:
+        plug.wait_for(state="attached", timeout=60000)
+        plug.wait_for(state="detached", timeout=120000)
+    except PlaywrightError:
+        pass
+
     file_menu_btn = page.get_by_role("button", name=re.compile("File"))
-    file_menu_btn.wait_for(state="visible", timeout=15000)
+    file_menu_btn.wait_for(state="visible", timeout=60000)
     file_menu_btn.scroll_into_view_if_needed()
     # force=True so the click isn't captured by the ReactFlow canvas layer
     file_menu_btn.click(force=True)
 
-    # Click "Load specification" and upload the JSON file
-    load_spec = page.get_by_role("button", name="Load specification")
-    load_spec.wait_for(state="visible", timeout=5000)
+    # Click "Import specification" and upload the JSON file
+    load_spec = page.get_by_role("button", name="Import specification")
+    load_spec.wait_for(state="visible", timeout=15000)
     assert load_spec.is_visible()
 
     with page.expect_file_chooser() as fc_info:
-        page.get_by_text("Load specification").click()
+        page.get_by_text("Import specification").click()
     fc_info.value.set_files(workflow_file)
 
     # Wait until all expected nodes have rendered on the ReactFlow canvas
     page.wait_for_function(
         f"document.querySelectorAll('.react-flow__node').length >= "
         f"{expected_node_count}",
-        timeout=15000,
+        timeout=60000,
     )
     # hide the tools menu bar so it doesn't interfere with the test
     # get parent of #step-loading
@@ -775,8 +1072,16 @@ class FrontendPage(Page):
             "H1,H2,H3",
         )
         self.frontend_server = frontend_server
+        self.base_url = frontend_server
         self.page = page
         self.browser_context = page.context
+
+    def __getattribute__(self, item):
+        try:
+            return object.__getattribute__(self, item)
+        except AttributeError:
+            page = object.__getattribute__(self, "page")
+            return object.__getattribute__(page, item)
 
     def set_language(self, language="en-US"):
         self.browser_context.set_extra_http_headers(
@@ -827,4 +1132,3 @@ class FrontendPage(Page):
 
     def expect_page_title(self, search_title: str):
         expect(self.page).to_have_title(re.compile(search_title))
-

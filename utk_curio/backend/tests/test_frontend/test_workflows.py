@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import pytest
 
 # from .utils import (
     # save_workflow_test_screenshot,
@@ -69,6 +70,11 @@ class TestWorkflowCanvas:
 
     # -- helpers -----------------------------------------------------------
 
+    #: Set when ``test_node_execution`` completes successfully for a workflow
+    #: (keyed by ``spec.filepath``). Used so ``test_provenance_graph`` does not
+    #: re-run node execution with long timeouts after a failed execution test.
+    _node_execution_success_by_spec: dict = {}
+
     def _node_locator(self, node: NodeSpec):
         """Return a Playwright ``Locator`` for a ReactFlow node element."""
         return self.page.locator(f'.react-flow__node[data-id="{node.id}"]')
@@ -80,6 +86,17 @@ class TestWorkflowCanvas:
             self.spec.filepath,
             test_name=request.function.__name__,
         )
+
+    def _node_execution_timeout_ms(self, node: NodeSpec) -> int:
+        """Return a generous timeout for nodes that execute heavy data ops."""
+        if node.type in {
+            "DATA_LOADING",
+            "DATA_CLEANING",
+            "DATA_TRANSFORMATION",
+            "COMPUTATION_ANALYSIS",
+        }:
+            return 120000
+        return 30000
 
     def _execute_all_playable_nodes(self):
         """Click *play* on every node that has a play button (topological order)
@@ -130,7 +147,10 @@ class TestWorkflowCanvas:
             result_span = node_el.locator("span").filter(
                 has_text=re.compile(r"^(Done|Error)$")
             ).first
-            result_span.wait_for(state="visible", timeout=30000)
+            result_span.wait_for(
+                state="visible",
+                timeout=self._node_execution_timeout_ms(node),
+            )
             result_text = result_span.text_content() or ""
             assert "Error" not in result_text, (
                 f"Node {node.id} ({node.type}) execution failed with Error"
@@ -227,6 +247,7 @@ class TestWorkflowCanvas:
         )
         for node in self.spec.nodes:
             node_el = self._node_locator(node)
+            node_el.scroll_into_view_if_needed()
             assert node_el.count() == 1, (
                 f"Node {node.id} ({node.type}) not found on canvas"
             )
@@ -332,6 +353,20 @@ class TestWorkflowCanvas:
                 is_active = "active" in (grammar_tab.get_attribute("class") or "")
                 if not is_active:
                     grammar_tab.click(force=True)
+                self.page.wait_for_function(
+                    """({ nodeId, eventKey }) => {
+                        const nodeEl = document.querySelector(
+                            `.react-flow__node[data-id="${nodeId}"]`
+                        );
+                        if (!nodeEl) return false;
+                        const tab = nodeEl.querySelector(
+                            `.nav-link[data-rr-ui-event-key="${eventKey}"]`
+                        );
+                        return !!tab && tab.classList.contains("active");
+                    }""",
+                    arg={"nodeId": node.id, "eventKey": "grammar"},
+                    timeout=6000,
+                )
 
                 grammar_editor = node_el.locator(
                     f'[id="grammarJsonEditor{node.id}"], '
@@ -628,12 +663,22 @@ class TestWorkflowCanvas:
                         )
 
         self._save_screenshot(request)
+        self.__class__._node_execution_success_by_spec[self.spec.filepath] = True
+
 
     # -- 5. Provenance graph -------------------------------------------------
 
     def test_provenance_graph(self, loaded_workflow, request):
         """After executing every playable node, each node that exposes a
         provenance tab must render a WebGL canvas with content."""
+        if not self.__class__._node_execution_success_by_spec.get(
+            self.spec.filepath
+        ):
+            pytest.fail(
+                "Node execution must succeed before the provenance check; "
+                "test_node_execution failed or did not complete for this workflow."
+            )
+
         self._execute_all_playable_nodes()
 
         for node in self.spec.nodes:
@@ -680,4 +725,3 @@ class TestWorkflowCanvas:
                 f"(no drawn content detected)"
             )
         # self._save_screenshot(request)
-

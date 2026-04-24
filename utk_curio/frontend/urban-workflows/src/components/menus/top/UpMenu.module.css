@@ -79,6 +79,16 @@
   background-color: rgb(251, 170, 105);
 }
 
+.dropDownRowActive {
+  background-color: #2B2C31;
+}
+
+.dropDownDivider {
+  height: 1px;
+  background-color: #2F3036;
+  margin: 0;
+}
+
 .dropDownIcon {
   color: white;
 }
@@ -111,6 +121,27 @@
   padding: 5px;
 }
 
+.subMenu {
+  background-color: #2A2B30;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.subMenuItem {
+  padding: 6px 16px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subMenuItem:hover {
+  background-color: rgb(251, 170, 105);
+}
+
 .dropdownWrapper {
   position: relative;
 }
@@ -122,4 +153,3 @@
   top: 12px;
   z-index: 200;
 }
-

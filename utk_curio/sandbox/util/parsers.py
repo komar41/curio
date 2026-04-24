@@ -202,7 +202,7 @@ def parse_geodataframe(data_value):
     # gdf = gpd.GeoDataFrame(df, geometry='geometry')
     gdf = gpd.GeoDataFrame.from_features(data_value["features"])
     if 'metadata' in data_value and 'name' in data_value['metadata']:
-        gdf.metadata = {'name': data_value['metadata']['name']}
+        gdf.__dict__['metadata'] = {'name': data_value['metadata']['name']}
     
     return gdf
 
@@ -257,6 +257,12 @@ def _make_serializable(val):
     """Recursively convert numpy/pandas types to native Python types."""
     if isinstance(val, np.ndarray):
         return [_make_serializable(v) for v in val.tolist()]
+    elif isinstance(val, tuple):
+        return [_make_serializable(v) for v in val]
+    elif isinstance(val, set):
+        return [_make_serializable(v) for v in sorted(val, key=repr)]
+    elif isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
     elif isinstance(val, (np.integer,)):
         return int(val)
     elif isinstance(val, (np.floating,)):
@@ -270,6 +276,103 @@ def _make_serializable(val):
     elif isinstance(val, list):
         return [_make_serializable(v) for v in val]
     return val
+
+
+def _is_missing_value(val):
+    if val is None:
+        return True
+    try:
+        missing = pd.isna(val)
+    except Exception:
+        return False
+    return isinstance(missing, (bool, np.bool_)) and bool(missing)
+
+
+def _encode_object_cell_for_parquet(val):
+    if _is_missing_value(val):
+        return None
+    normalized = _make_serializable(val)
+    return json.dumps(normalized, ensure_ascii=False, default=str)
+
+
+def _decode_object_cell_from_parquet(val):
+    if _is_missing_value(val):
+        return None
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except Exception:
+            return safe_json_loads(val)
+    return val
+
+
+def _prepare_frame_for_parquet(frame, geometry_col=None):
+    prepared = frame.copy()
+    encoded_object_columns = []
+
+    for col in prepared.columns:
+        if geometry_col is not None and col == geometry_col:
+            continue
+        if prepared[col].dtype == object:
+            prepared[col] = prepared[col].apply(_encode_object_cell_for_parquet)
+            encoded_object_columns.append(col)
+
+    return prepared, encoded_object_columns
+
+
+def _serialize_parquet_meta(frame_metadata=None, encoded_object_columns=None):
+    payload = {}
+    if frame_metadata:
+        payload["frame_metadata"] = frame_metadata
+    if encoded_object_columns:
+        payload["encoded_object_columns"] = encoded_object_columns
+    return json.dumps(payload) if payload else None
+
+
+def _parse_parquet_meta(meta_json):
+    if not meta_json:
+        return None, []
+
+    try:
+        payload = json.loads(meta_json)
+    except Exception:
+        return None, []
+
+    if isinstance(payload, dict) and (
+        "frame_metadata" in payload or "encoded_object_columns" in payload
+    ):
+        return payload.get("frame_metadata"), payload.get("encoded_object_columns", [])
+
+    # Backward compatibility: older geodataframe rows stored only ``gdf.metadata``.
+    return payload, []
+
+
+def _restore_frame_from_parquet(frame, encoded_object_columns, geometry_col=None):
+    if encoded_object_columns:
+        for col in encoded_object_columns:
+            if col in frame.columns:
+                frame[col] = frame[col].apply(_decode_object_cell_from_parquet)
+        return frame
+
+    for col in frame.columns:
+        if geometry_col is not None and col == geometry_col:
+            continue
+        if frame[col].dtype == object:
+            frame[col] = frame[col].apply(safe_json_loads)
+
+    return frame
+
+
+def normalize_dataframe_for_json(df):
+    """Convert DataFrame cells to JSON-safe Python values."""
+    normalized = df.copy()
+
+    for col in normalized.columns:
+        if normalized[col].dtype == object:
+            normalized[col] = normalized[col].apply(safe_json_loads)
+        normalized[col] = normalized[col].apply(_make_serializable)
+
+    return normalized.astype(object).where(pd.notnull(normalized), None)
 
 
 def fix_json_strings(gdf):
@@ -294,9 +397,7 @@ def parseOutput(output):
         json_output['data'] = output
         json_output['dataType'] = type(output).__name__
     elif isinstance(output, pd.DataFrame) and not isinstance(output, gpd.GeoDataFrame):
-        # json_output['data'] = output.to_dict(orient='list')
-        clean_df = output.astype(object).where(pd.notnull(output), None)
-        clean_df = make_json_safe(clean_df)
+        clean_df = normalize_dataframe_for_json(output)
         json_output['data'] = clean_df.to_dict(orient='list')
         json_output['dataType'] = 'dataframe'
     elif isinstance(output, gpd.GeoDataFrame):
@@ -424,14 +525,21 @@ def save_to_duckdb(value, node_id=None):
         # --- GeoDataFrame MUST come before DataFrame (gpd.GeoDataFrame subclasses pd.DataFrame) ---
         elif isinstance(value, gpd.GeoDataFrame):
             buf = io.BytesIO()
-            value.to_parquet(buf)  # GeoParquet — CRS preserved automatically
+            prepared, encoded_object_columns = _prepare_frame_for_parquet(
+                value,
+                geometry_col=value.geometry.name,
+            )
+            prepared.to_parquet(buf)  # GeoParquet — CRS preserved automatically
             # parquet drops Python-side attributes like ``gdf.metadata`` (set by
             # parse_geodataframe when upstream JSON carried a metadata.name). VIS_UTK
             # hard-requires that name (useUTK.ts early-returns without it, which
             # leaves disablePlay=true and stalls the play button), so stash it in
             # value_json and restore on load.
             meta = getattr(value, 'metadata', None)
-            meta_json = json.dumps(meta) if meta else None
+            meta_json = _serialize_parquet_meta(
+                frame_metadata=meta,
+                encoded_object_columns=encoded_object_columns,
+            )
             con.execute(
                 "INSERT INTO artifacts (id, node_id, kind, blob, value_json) VALUES (?, ?, ?, ?, ?)",
                 [art_id, node_id, 'geodataframe', buf.getvalue(), meta_json]
@@ -440,10 +548,14 @@ def save_to_duckdb(value, node_id=None):
 
         elif isinstance(value, pd.DataFrame):
             buf = io.BytesIO()
-            value.to_parquet(buf, engine='pyarrow', index=False)
+            prepared, encoded_object_columns = _prepare_frame_for_parquet(value)
+            prepared.to_parquet(buf, engine='pyarrow', index=False)
+            meta_json = _serialize_parquet_meta(
+                encoded_object_columns=encoded_object_columns,
+            )
             con.execute(
-                "INSERT INTO artifacts (id, node_id, kind, blob) VALUES (?, ?, ?, ?)",
-                [art_id, node_id, 'dataframe', buf.getvalue()]
+                "INSERT INTO artifacts (id, node_id, kind, blob, value_json) VALUES (?, ?, ?, ?, ?)",
+                [art_id, node_id, 'dataframe', buf.getvalue(), meta_json]
             )
             kind_logged = f'dataframe rows={len(value)}'
 
@@ -505,30 +617,19 @@ def load_from_duckdb(art_id):
         #     result = gpd.read_parquet(io.BytesIO(blob))
         elif kind == 'dataframe':
             result = pd.read_parquet(io.BytesIO(blob))
-            # Restore old-pipeline behavior (parseOutput → fix_json_strings):
-            # auto-parse JSON-dict-string cells in object columns back into
-            # Python dicts so downstream user code (pd.json_normalize, dict
-            # indexing, etc.) sees structured data. In the old pipeline this
-            # happened on save via parseOutput; we now run it on load so the
-            # on-disk parquet schema stays simple (strings stay strings).
-            for col in result.columns:
-                if result[col].dtype == object:
-                    result[col] = result[col].apply(safe_json_loads)
+            _, encoded_object_columns = _parse_parquet_meta(v_json)
+            result = _restore_frame_from_parquet(result, encoded_object_columns)
         elif kind == 'geodataframe':
             result = gpd.read_parquet(io.BytesIO(blob))
-            for col in result.columns:
-                if col == 'geometry':
-                    continue
-                if result[col].dtype == object:
-                    result[col] = result[col].apply(safe_json_loads)
+            frame_meta, encoded_object_columns = _parse_parquet_meta(v_json)
+            result = _restore_frame_from_parquet(
+                result,
+                encoded_object_columns,
+                geometry_col=result.geometry.name,
+            )
             # Restore the .metadata attribute stashed at save time (see save_to_duckdb).
-            if v_json:
-                try:
-                    meta = json.loads(v_json)
-                    if meta:
-                        result.metadata = meta
-                except Exception:
-                    pass
+            if frame_meta:
+                result.__dict__['metadata'] = frame_meta
         elif kind == 'raster':
             result = rasterio.open(v_str)
         elif kind == 'list_of_ids':

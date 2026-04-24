@@ -98,8 +98,15 @@ def set_environment_variables(backend_host, backend_port, sandbox_host, sandbox_
     os.environ["FLASK_BACKEND_PORT"] = str(backend_port)
     os.environ["FLASK_SANDBOX_HOST"] = sandbox_host
     os.environ["FLASK_SANDBOX_PORT"] = str(sandbox_port)
-    os.environ["CURIO_LAUNCH_CWD"] = os.getcwd()
-    os.environ["CURIO_SHARED_DATA"] = str(Path("./.curio/data").resolve())
+    # Respect an already-set CURIO_LAUNCH_CWD / CURIO_SHARED_DATA so the test
+    # harness can point the backend at a dedicated workspace (see
+    # utk_curio/backend/tests/conftest.py). Only fall back to cwd otherwise.
+    os.environ["CURIO_LAUNCH_CWD"] = os.environ.get(
+        "CURIO_LAUNCH_CWD"
+    ) or os.getcwd()
+    os.environ["CURIO_SHARED_DATA"] = os.environ.get(
+        "CURIO_SHARED_DATA"
+    ) or str(Path("./.curio/data").resolve())
     
     log_always(f"Environment Variables Set:")
     log_always(f"FLASK_BACKEND_HOST={os.environ['FLASK_BACKEND_HOST']}")
@@ -119,6 +126,37 @@ def logger():
             break
         log_always(line, 2)
         output_queue.task_done()
+
+
+def run_spa_static_server(directory: str, port: int) -> None:
+    """Serve a built SPA with index.html fallback for deep links.
+
+    ``python -m http.server`` returns 404 for routes like ``/auth/signup`` or
+    ``/workflow/<id>`` because those files do not exist on disk. Our frontend
+    is a client-side router, so non-asset GETs should fall back to
+    ``index.html`` instead.
+    """
+
+    dist_dir = os.path.abspath(directory)
+
+    class SpaStaticHandler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=dist_dir, **kwargs)
+
+        def do_GET(self):
+            request_path = self.path.split("?", 1)[0].split("#", 1)[0]
+            candidate = request_path.lstrip("/")
+            fs_path = os.path.join(dist_dir, candidate)
+            if (
+                request_path not in ("", "/")
+                and not os.path.exists(fs_path)
+                and not os.path.splitext(candidate)[1]
+            ):
+                self.path = "/index.html"
+            return super().do_GET()
+
+    with ThreadingHTTPServer(("0.0.0.0", port), SpaStaticHandler) as httpd:
+        httpd.serve_forever()
 
 def check_install_build(dir, force_rebuild=False):
     # Determine the absolute path whether it is provided as relative or absolute
@@ -186,6 +224,7 @@ def start_frontend(force_rebuild=False, no_server=False):
 
     dir = "frontend/urban-workflows/"
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
     abs_dir = os.path.abspath(dir) if os.path.isabs(dir) else os.path.join(script_dir, dir)
     os.chdir(abs_dir)
     log_info(f"[Frontend] Current working directory: {os.getcwd()}", COLOR_FRONTEND, 0)
@@ -213,15 +252,37 @@ def start_frontend(force_rebuild=False, no_server=False):
                 clean_shutdown()
 
         else:
+            env = os.environ.copy()
+            env = {
+                **env,
+                "PYTHONPATH": project_root + os.pathsep + env.get("PYTHONPATH", ""),
+            }
             process = subprocess.Popen(
-                ["python", "-m", "http.server", "8080", "--directory", "dist"],
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    (
+                        "from utk_curio.main import run_spa_static_server; "
+                        "run_spa_static_server('dist', 8080)"
+                    ),
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 shell=shell_required,
-                env={**os.environ}
+                env=env,
             )
-            log_info(f"[Frontend] Serving static files.", COLOR_FRONTEND, 0)
+            threading.Thread(
+                target=stream_output,
+                args=(process, "Frontend", COLOR_FRONTEND),
+                daemon=True,
+            ).start()
+            log_info(
+                f"[Frontend] Serving static files with SPA fallback.",
+                COLOR_FRONTEND,
+                0,
+            )
 
     except subprocess.CalledProcessError as e:
         log_error(f"[Frontend] Exit Code: {e.returncode}")
@@ -239,29 +300,80 @@ def start_frontend(force_rebuild=False, no_server=False):
     return process
 
 
+
+
+def _is_testing() -> bool:
+    return os.environ.get("CURIO_TESTING", "").lower() in ("1", "true", "yes")
+
+
 def prepare_backend_database(force=False):
-    # script_dir = os.path.dirname(os.path.abspath(__file__))
-    # backend_dir = os.path.join(script_dir, "backend")
-    # db_file = os.path.join(backend_dir, "provenance.db")
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
-    # backend_dir = os.path.join(script_dir, "backend")
-    db_dir = os.path.join(os.getcwd(), ".curio")
+
+    # When CURIO_TESTING=1 the backend reads .curio/test/*.db (see
+    # backend/config.py + app/api/routes.py::get_db_path). Mirror that here
+    # so `curio start` bootstraps the correct schema — otherwise the first
+    # request to the running backend hits "no such table: user" because we
+    # migrated the dev DB instead of the test one.
+    testing = _is_testing()
+    launch_dir = os.environ.get("CURIO_LAUNCH_CWD") or os.getcwd()
+    if testing:
+        db_dir = os.path.join(launch_dir, ".curio", "test")
+    else:
+        db_dir = os.path.join(launch_dir, ".curio")
     db_file = os.path.join(db_dir, "provenance.db")
 
-    if not os.path.exists(db_file) or force:
+    # Testing always re-runs (equivalent to force=True) so every
+    # `curio start` lands on an empty-but-migrated DB, like Django's
+    # TEST_RUNNER.
+    needs_init = testing or force or not os.path.exists(db_file)
+
+    if needs_init:
         if not os.path.exists(db_dir):
             os.makedirs(db_dir)
 
         log_info(f"[Backend] Preparing backend database...", COLOR_BACKEND, 0)
         log_info(f"[Backend] Using database path: {db_file}", COLOR_BACKEND, 0)
         try:
-            env = os.environ.copy()
-            env = {**os.environ, "FLASK_APP": "utk_curio.backend.app:create_app", "PYTHONPATH": project_root + os.pathsep + env.get("PYTHONPATH", "")}
-            subprocess.run(["python", "backend/create_provenance_db.py", os.path.abspath(db_file)], cwd=script_dir, check=True, env=env)
+            env = {
+                **os.environ,
+                "FLASK_APP": "utk_curio.backend.app:create_app",
+                "PYTHONPATH": project_root + os.pathsep + os.environ.get("PYTHONPATH", ""),
+            }
+            # Make sure the `flask db upgrade` subprocess targets the test
+            # sqlite file (not the dev one). backend/config._resolve_database_uri
+            # already prefers DATABASE_URL_TEST when CURIO_TESTING is set, but
+            # we set both explicitly so intent is obvious in the child env.
+            if testing:
+                test_sqla = os.path.join(db_dir, "urban_workflow_test.db")
+                test_url = os.environ.get(
+                    "DATABASE_URL_TEST", f"sqlite:///{test_sqla}"
+                )
+                env["CURIO_TESTING"] = "1"
+                env["CURIO_LAUNCH_CWD"] = launch_dir
+                env["DATABASE_URL_TEST"] = test_url
+                env["DATABASE_URL"] = test_url
+                # Remove any stale file so the session starts empty.
+                for stale in (db_file, test_sqla):
+                    try:
+                        os.remove(stale)
+                    except FileNotFoundError:
+                        pass
 
-            subprocess.run(["flask", "db", "upgrade", "--directory", "utk_curio/backend/migrations"], check=True, cwd=project_root, env=env)
-            subprocess.run(["flask", "db", "migrate", "-m", "Migration", "--directory", "utk_curio/backend/migrations"], check=True, cwd=project_root, env=env)
+            subprocess.run(
+                ["python", "backend/create_provenance_db.py", os.path.abspath(db_file)],
+                cwd=script_dir, check=True, env=env,
+            )
+
+            subprocess.run(
+                ["flask", "db", "upgrade", "--directory", "utk_curio/backend/migrations"],
+                check=True, cwd=project_root, env=env,
+            )
+            if not testing:
+                subprocess.run(
+                    ["flask", "db", "migrate", "-m", "Migration", "--directory", "utk_curio/backend/migrations"],
+                    check=True, cwd=project_root, env=env,
+                )
             log_info(f"[Backend] Database initialized successfully.", COLOR_BACKEND, 0)
         except Exception as e:
             log_error(f"[Backend] Failed to initialize the database: {e}")
