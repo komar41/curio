@@ -381,11 +381,11 @@ def prepare_backend_database(force=False):
                 ["flask", "db", "upgrade", "--directory", "utk_curio/backend/migrations"],
                 check=True, cwd=project_root, env=env,
             )
-            if not testing:
-                subprocess.run(
-                    ["flask", "db", "migrate", "-m", "Migration", "--directory", "utk_curio/backend/migrations"],
-                    check=True, cwd=project_root, env=env,
-                )
+            # if not testing:
+            #     subprocess.run(
+            #         ["flask", "db", "migrate", "-m", "Migration", "--directory", "utk_curio/backend/migrations"],
+            #         check=True, cwd=project_root, env=env,
+            #     )
             log_info(f"[Backend] Database initialized successfully.", COLOR_BACKEND, 0)
         except Exception as e:
             log_error(f"[Backend] Failed to initialize the database: {e}")
