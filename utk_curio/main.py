@@ -92,7 +92,7 @@ def stream_output(process, name, color):
         if process.stderr:
             process.stderr.close()
 
-def set_environment_variables(backend_host, backend_port, sandbox_host, sandbox_port):
+def set_environment_variables(backend_host, backend_port, sandbox_host, sandbox_port, no_auth=True, no_projects=False, deploy=False):
     """Sets the environment variables for Backend and Sandbox."""
     os.environ["FLASK_BACKEND_HOST"] = backend_host
     os.environ["FLASK_BACKEND_PORT"] = str(backend_port)
@@ -107,7 +107,14 @@ def set_environment_variables(backend_host, backend_port, sandbox_host, sandbox_
     os.environ["CURIO_SHARED_DATA"] = os.environ.get(
         "CURIO_SHARED_DATA"
     ) or str(Path("./.curio/data").resolve())
-    
+
+    if deploy:
+        os.environ["CURIO_NO_AUTH"] = "0"
+        os.environ["CURIO_NO_PROJECT"] = "0"
+    else:
+        os.environ["CURIO_NO_AUTH"] = "1" if no_auth else "0"
+        os.environ["CURIO_NO_PROJECT"] = "1" if no_projects else "0"
+
     log_always(f"Environment Variables Set:")
     log_always(f"FLASK_BACKEND_HOST={os.environ['FLASK_BACKEND_HOST']}")
     log_always(f"FLASK_BACKEND_PORT={os.environ['FLASK_BACKEND_PORT']}")
@@ -115,6 +122,8 @@ def set_environment_variables(backend_host, backend_port, sandbox_host, sandbox_
     log_always(f"FLASK_SANDBOX_PORT={os.environ['FLASK_SANDBOX_PORT']}")
     log_always(f"CURIO_LAUNCH_CWD={os.environ['CURIO_LAUNCH_CWD']}")
     log_always(f"CURIO_SHARED_DATA={os.environ['CURIO_SHARED_DATA']}")
+    log_always(f"CURIO_NO_AUTH={os.environ['CURIO_NO_AUTH']}")
+    log_always(f"CURIO_NO_PROJECT={os.environ['CURIO_NO_PROJECT']}")
 
 def logger():
     """
@@ -528,6 +537,18 @@ def main():
     parser.add_argument(
         "--verbose", type=int, default=1, help="Verbosity level (e.g., 0=silent, 1=normal, 2=debug)"
     )
+    parser.add_argument(
+        "--no-auth", action="store_true", default=True,
+        help="Disable authentication (sets CURIO_NO_AUTH=1, default)"
+    )
+    parser.add_argument(
+        "--no-projects", action="store_true", default=False,
+        help="Disable projects (sets CURIO_NO_PROJECT=1)"
+    )
+    parser.add_argument(
+        "--deploy", action="store_true", default=False,
+        help="Enable authentication and projects (sets CURIO_NO_AUTH=0, CURIO_NO_PROJECT=0)"
+    )
     if os.getenv("CURIO_DEV") == "1":
         parser.add_argument(
             "--force-rebuild", action="store_true",
@@ -552,7 +573,10 @@ def main():
         backend_host=args.backend_host,
         backend_port=args.backend_port,
         sandbox_host=args.sandbox_host,
-        sandbox_port=args.sandbox_port
+        sandbox_port=args.sandbox_port,
+        no_auth=args.no_auth,
+        no_projects=args.no_projects,
+        deploy=args.deploy,
     )
 
     # if os.getenv("CURIO_DEV") != "1":
