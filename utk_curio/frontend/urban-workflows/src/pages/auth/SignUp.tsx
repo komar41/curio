@@ -5,10 +5,12 @@ import { SignUpForm } from "../../components/AuthForm/SignUpForm";
 import { useUserContext } from "../../providers/UserProvider";
 
 const SignUp: React.FC = () => {
-  const { user, loading, enableUserAuth, googleClientId } = useUserContext();
+  const { user, loading, enableUserAuth, skipProjectPage, googleClientId } =
+    useUserContext();
+  const entryRoute = skipProjectPage ? "/dataflow" : "/projects";
 
   if (!loading && (user || !enableUserAuth)) {
-    return <Navigate to="/projects" replace />;
+    return <Navigate to={entryRoute} replace />;
   }
 
   return (

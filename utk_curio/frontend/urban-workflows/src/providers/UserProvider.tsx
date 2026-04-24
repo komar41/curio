@@ -20,6 +20,7 @@ interface UserProviderProps {
   loading: boolean;
   isAuthenticated: boolean;
   enableUserAuth: boolean;
+  skipProjectPage: boolean;
   allowGuest: boolean;
   googleClientId: string;
   signup: (data: {
@@ -47,6 +48,7 @@ export const UserContext = createContext<UserProviderProps>({
   loading: false,
   isAuthenticated: false,
   enableUserAuth: true,
+  skipProjectPage: false,
   allowGuest: false,
   googleClientId: process.env.VITE_GOOGLE_OAUTH_CLIENT_ID || "",
   signup: async () => null,
@@ -64,6 +66,7 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [enableUserAuth, setEnableUserAuth] = useState<boolean>(true);
+  const [skipProjectPage, setSkipProjectPage] = useState<boolean>(false);
   const [allowGuest, setAllowGuest] = useState<boolean>(false);
   const [googleClientId, setGoogleClientId] = useState<string>(
     process.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ""
@@ -93,12 +96,21 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(true);
       try {
         const cfg = await authApi.getPublicConfig().catch(() => null);
-        const authEnabled = cfg?.enable_user_auth ?? true;
+        const projectPageSkipped = Boolean(
+          cfg?.skip_project_page ?? cfg?.curio_no_project ?? false
+        );
+        // ``enable_user_auth`` was removed from the public config: auth is
+        // considered enabled unless the backend has explicitly opted out via
+        // ``CURIO_NO_AUTH`` or the ``CURIO_NO_PROJECT`` shortcut.
+        const authSkipped =
+          Boolean(cfg?.curio_no_auth ?? false) || projectPageSkipped;
+        const authEnabled = !authSkipped;
         const sharedGuestUsername = cfg?.shared_guest_username ?? "guest_shared";
 
         if (cancelled) return;
 
         setEnableUserAuth(authEnabled);
+        setSkipProjectPage(projectPageSkipped);
         setAllowGuest(Boolean(authEnabled && cfg?.allow_guest_login));
         if (cfg?.google_client_id) {
           setGoogleClientId(cfg.google_client_id);
@@ -253,6 +265,7 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         isAuthenticated: !!user,
         enableUserAuth,
+        skipProjectPage,
         allowGuest,
         googleClientId,
         signup,

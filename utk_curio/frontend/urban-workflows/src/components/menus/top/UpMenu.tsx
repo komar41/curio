@@ -34,6 +34,7 @@ import introJs from "intro.js";
 import "intro.js/introjs.css";
 import { useNavigate } from "react-router-dom";
 import { projectsApi, ProjectSummary } from "../../../api/projectsApi";
+import { useUserContext } from "../../../providers/UserProvider";
 
 export default function UpMenu({
     setDashBoardMode,
@@ -60,6 +61,7 @@ export default function UpMenu({
     const menuBarRef = useRef<HTMLDivElement>(null);
     const loadTrillInputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
+    const { skipProjectPage } = useUserContext();
     const { getNodes, getEdges } = useReactFlow();
 
     const {
@@ -385,65 +387,75 @@ export default function UpMenu({
                     </button>
                     {activeMenu === "file" && (
                         <div className={styles.dropDownMenu} onClick={(e) => e.stopPropagation()}>
-                            <div className={styles.dropDownRow} onClick={handleNewWorkflow}>
-                                <FontAwesomeIcon className={styles.dropDownIcon} icon={faPlus} />
-                                <button className={styles.noStyleButton}>New dataflow</button>
-                            </div>
-                            <div className={styles.dropDownDivider} />
-                            <div
-                                className={clsx(
-                                    styles.dropDownRow,
-                                    savedSubmenuOpen && styles.dropDownRowActive,
-                                )}
-                                onClick={handleOpenSavedWorkflows}
-                            >
-                                <FontAwesomeIcon
-                                    className={styles.dropDownIcon}
-                                    icon={faFolderOpen}
-                                />
-                                <button className={styles.noStyleButton}>Saved dataflows</button>
-                            </div>
-                            {savedSubmenuOpen && (
-                                <div
-                                    className={styles.subMenu}
-                                    data-testid="saved-workflows-submenu"
-                                >
-                                    {savedProjects.length === 0 && (
+                            {/* Project-backed entries (New dataflow / Saved dataflows / Save /
+                                Save as) are hidden when Curio runs in --no-project mode
+                                (CURIO_NO_PROJECT=1): there is no per-user project list to
+                                read from or write to, and "New dataflow" routes to
+                                /dataflow/new which only makes sense alongside the projects
+                                page. */}
+                            {!skipProjectPage && (
+                                <>
+                                    <div className={styles.dropDownRow} onClick={handleNewWorkflow}>
+                                        <FontAwesomeIcon className={styles.dropDownIcon} icon={faPlus} />
+                                        <button className={styles.noStyleButton}>New dataflow</button>
+                                    </div>
+                                    <div className={styles.dropDownDivider} />
+                                    <div
+                                        className={clsx(
+                                            styles.dropDownRow,
+                                            savedSubmenuOpen && styles.dropDownRowActive,
+                                        )}
+                                        onClick={handleOpenSavedWorkflows}
+                                    >
+                                        <FontAwesomeIcon
+                                            className={styles.dropDownIcon}
+                                            icon={faFolderOpen}
+                                        />
+                                        <button className={styles.noStyleButton}>Saved dataflows</button>
+                                    </div>
+                                    {savedSubmenuOpen && (
                                         <div
-                                            className={styles.subMenuItem}
-                                            style={{ opacity: 0.5 }}
-                                            data-testid="saved-workflows-empty"
+                                            className={styles.subMenu}
+                                            data-testid="saved-workflows-submenu"
                                         >
-                                            No saved projects
+                                            {savedProjects.length === 0 && (
+                                                <div
+                                                    className={styles.subMenuItem}
+                                                    style={{ opacity: 0.5 }}
+                                                    data-testid="saved-workflows-empty"
+                                                >
+                                                    No saved projects
+                                                </div>
+                                            )}
+                                            {savedProjects.map((project) => (
+                                                <div
+                                                    key={project.id}
+                                                    className={styles.subMenuItem}
+                                                    onClick={() => handleOpenProject(project.id)}
+                                                    data-testid="saved-workflows-item"
+                                                >
+                                                    {project.name}
+                                                </div>
+                                            ))}
+                                            <div
+                                                className={styles.subMenuItem}
+                                                style={{
+                                                    borderTop: "1px solid #333",
+                                                    fontStyle: "italic",
+                                                }}
+                                                onClick={() => {
+                                                    navigate("/projects");
+                                                    setActiveMenu(null);
+                                                    setSavedSubmenuOpen(false);
+                                                }}
+                                            >
+                                                View all projects
+                                            </div>
                                         </div>
                                     )}
-                                    {savedProjects.map((project) => (
-                                        <div
-                                            key={project.id}
-                                            className={styles.subMenuItem}
-                                            onClick={() => handleOpenProject(project.id)}
-                                            data-testid="saved-workflows-item"
-                                        >
-                                            {project.name}
-                                        </div>
-                                    ))}
-                                    <div
-                                        className={styles.subMenuItem}
-                                        style={{
-                                            borderTop: "1px solid #333",
-                                            fontStyle: "italic",
-                                        }}
-                                        onClick={() => {
-                                            navigate("/projects");
-                                            setActiveMenu(null);
-                                            setSavedSubmenuOpen(false);
-                                        }}
-                                    >
-                                        View all projects
-                                    </div>
-                                </div>
+                                    <div className={styles.dropDownDivider} />
+                                </>
                             )}
-                            <div className={styles.dropDownDivider} />
                             <div className={styles.dropDownRow} onClick={loadTrillFile}>
                                 <FontAwesomeIcon
                                     className={styles.dropDownIcon}
@@ -453,26 +465,30 @@ export default function UpMenu({
                                     Import specification
                                 </button>
                             </div>
-                            <div className={styles.dropDownDivider} />
-                            <div className={styles.dropDownRow} onClick={handleSave}>
-                                <FontAwesomeIcon
-                                    className={styles.dropDownIcon}
-                                    icon={faFloppyDisk}
-                                />
-                                <button className={styles.noStyleButton} disabled={saving}>
-                                    {saving ? "Saving..." : "Save specification"}
-                                </button>
-                            </div>
-                            <div className={styles.dropDownDivider} />
-                            <div className={styles.dropDownRow} onClick={handleSaveAs}>
-                                <FontAwesomeIcon
-                                    className={styles.dropDownIcon}
-                                    icon={faFloppyDisk}
-                                />
-                                <button className={styles.noStyleButton}>
-                                    Save as...
-                                </button>
-                            </div>
+                            {!skipProjectPage && (
+                                <>
+                                    <div className={styles.dropDownDivider} />
+                                    <div className={styles.dropDownRow} onClick={handleSave}>
+                                        <FontAwesomeIcon
+                                            className={styles.dropDownIcon}
+                                            icon={faFloppyDisk}
+                                        />
+                                        <button className={styles.noStyleButton} disabled={saving}>
+                                            {saving ? "Saving..." : "Save specification"}
+                                        </button>
+                                    </div>
+                                    <div className={styles.dropDownDivider} />
+                                    <div className={styles.dropDownRow} onClick={handleSaveAs}>
+                                        <FontAwesomeIcon
+                                            className={styles.dropDownIcon}
+                                            icon={faFloppyDisk}
+                                        />
+                                        <button className={styles.noStyleButton}>
+                                            Save as...
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                             <div className={styles.dropDownDivider} />
                             <div className={styles.dropDownRow} onClick={exportTrill}>
                                 <FontAwesomeIcon
@@ -482,17 +498,6 @@ export default function UpMenu({
                                 <button className={styles.noStyleButton}>
                                     Export specification
                                 </button>
-                            </div>
-                            <div className={styles.dropDownDivider} />
-                            <div
-                                className={styles.dropDownRow}
-                                onClick={() => {
-                                    setPackagesOpen(true);
-                                    setActiveMenu(null);
-                                }}
-                            >
-                                <FontAwesomeIcon className={styles.dropDownIcon} icon={faCubes} />
-                                <button className={styles.noStyleButton}>Python packages</button>
                             </div>
                         </div>
                     )}
@@ -555,7 +560,7 @@ export default function UpMenu({
                                 }}
                             >
                                 <FontAwesomeIcon className={styles.dropDownIcon} icon={faCubes} />
-                                <button className={styles.noStyleButton}>Python Packages</button>
+                                <button className={styles.noStyleButton}>Python packages</button>
                             </div>
                             <div className={styles.dropDownRow} onClick={openDatasetsModal}>
                                 <FontAwesomeIcon className={styles.dropDownIcon} icon={faDatabase} />

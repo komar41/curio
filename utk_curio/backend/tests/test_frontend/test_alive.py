@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .utils import auth_enabled_env
+from .utils import auth_enabled_env, skip_project_page_env
 
 if TYPE_CHECKING:
     from .utils import FrontendPage
@@ -32,6 +32,13 @@ def test_frontend_server(app_frontend: FrontendPage, page):
     page.goto(app_frontend.base_url + "/")
     page.wait_for_load_state("domcontentloaded")
     auth_disabled = not auth_enabled_env()
+    skip_projects = skip_project_page_env()
+
+    if skip_projects:
+        # ``--no-project`` mode: SPA auto-guest-signs in and routes ``/`` to
+        # ``/dataflow`` (see index.tsx); there is no ``/projects`` page.
+        page.wait_for_url("**/dataflow**", timeout=60000)
+        return
 
     if auth_disabled:
         page.wait_for_url("**/projects", timeout=60000)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from .utils import signup_and_enter_new_workflow, signup_e2e_user
+from .utils import require_project_page, signup_and_enter_new_workflow, signup_e2e_user
 
 if TYPE_CHECKING:
     from .utils import FrontendPage
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 def test_project_not_visible_to_other_user(app_frontend: "FrontendPage", page):
     """User A saves a project; User B should not see it on their projects page."""
+    require_project_page()
     base = app_frontend.base_url
 
     signup_and_enter_new_workflow(

@@ -112,7 +112,9 @@ def set_environment_variables(backend_host, backend_port, sandbox_host, sandbox_
         os.environ["CURIO_NO_AUTH"] = "0"
         os.environ["CURIO_NO_PROJECT"] = "0"
     else:
-        os.environ["CURIO_NO_AUTH"] = "0" if auth else "1"
+        os.environ["CURIO_NO_AUTH"] = (
+            "1" if no_project else ("0" if auth else "1")
+        )
         os.environ["CURIO_NO_PROJECT"] = "1" if no_project else "0"
 
     log_always(f"Environment Variables Set:")
@@ -543,7 +545,10 @@ def main():
     )
     parser.add_argument(
         "--no-project", action="store_true", default=False,
-        help="Disable projects (sets CURIO_NO_PROJECT=1)"
+        help=(
+            "Skip login and projects pages "
+            "(sets CURIO_NO_AUTH=1, CURIO_NO_PROJECT=1)"
+        )
     )
     parser.add_argument(
         "--deploy", action="store_true", default=False,

@@ -125,7 +125,25 @@ test_frontend/
   test_project_ownership.py   # two-user isolation via /api/projects (UI auth)
   test_guest_project_cleanup.py
   test_guest_flag.py          # ALLOW_GUEST_LOGIN toggle
+  test_no_project_menu.py     # File-menu UI in --no-project mode (CURIO_NO_PROJECT=1)
 ```
+
+## CURIO_NO_PROJECT-mode tests
+
+The suite has two configurations with mutually-exclusive UI surfaces:
+
+- **default** (`CURIO_NO_PROJECT=0`, the implicit value): the SPA exposes a per-user `/projects` page and the File menu offers `New dataflow` / `Saved dataflows` / `Save specification` / `Save as...`.
+- **no-project** (`CURIO_NO_PROJECT=1`): the SPA auto-guest-signs in, routes `/` directly to `/dataflow`, and hides every project-backed File-menu entry.
+
+Tests that depend on either surface call `require_project_page()` / `require_no_project_mode()` from [`utils.py`](utils.py) (both consult the live backend's `/api/config/public` so the pytest process and the `curio start` subprocess never disagree). To exercise the no-project UI explicitly:
+
+```bash
+CURIO_NO_PROJECT=1 CURIO_TESTING=1 pytest \
+    utk_curio/backend/tests/test_frontend/test_no_project_menu.py \
+    utk_curio/backend/tests/test_frontend/test_alive.py
+```
+
+`fixtures.py::curio_servers` reads `CURIO_NO_PROJECT` from the pytest env and forwards `--no-project` to `curio.py start`, so no extra wiring is needed.
 
 ## Environment Variables
 

@@ -8,8 +8,9 @@ import { useNavigate, Link } from "react-router-dom";
 export const SignInForm: React.FC<{
   googleClientId: string;
 }> = ({ googleClientId }) => {
-  const { signin, signinWithGoogle, signinGuest, allowGuest } =
+  const { signin, signinWithGoogle, signinGuest, allowGuest, skipProjectPage } =
     useUserContext();
+  const entryRoute = skipProjectPage ? "/dataflow" : "/projects";
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +23,7 @@ export const SignInForm: React.FC<{
     setSubmitting(true);
     try {
       await signin(identifier, password);
-      navigate("/projects");
+      navigate(entryRoute);
     } catch (err: any) {
       setError(err.body?.error || err.message || "Sign in failed.");
     } finally {
@@ -32,12 +33,12 @@ export const SignInForm: React.FC<{
 
   const handleGoogle = async (code: string) => {
     const user = await signinWithGoogle(code);
-    if (user) navigate("/projects");
+    if (user) navigate(entryRoute);
   };
 
   const handleGuest = async () => {
     const user = await signinGuest();
-    if (user) navigate("/projects");
+    if (user) navigate(entryRoute);
   };
 
   return (

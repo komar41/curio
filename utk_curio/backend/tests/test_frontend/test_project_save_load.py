@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from .utils import signup_and_enter_new_workflow, signup_e2e_user
+from .utils import require_project_page, signup_and_enter_new_workflow, signup_e2e_user
 
 if TYPE_CHECKING:
     from .utils import FrontendPage
@@ -19,6 +19,7 @@ def test_project_save_via_menu(app_frontend: "FrontendPage", page):
     list via `refreshSavedProjects()` before closing the menu, so reopening
     File > Saved dataflows must render the new project immediately.
     """
+    require_project_page()
     signup_and_enter_new_workflow(
         page,
         app_frontend.base_url,
@@ -66,6 +67,7 @@ def test_project_save_via_menu(app_frontend: "FrontendPage", page):
 
 def test_project_list_page(app_frontend: "FrontendPage", page):
     """Verify the projects page shows saved projects."""
+    require_project_page()
     base = app_frontend.base_url
 
     signup_e2e_user(

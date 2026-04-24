@@ -8,8 +8,9 @@ import { useNavigate, Link } from "react-router-dom";
 export const SignUpForm: React.FC<{
   googleClientId: string;
 }> = ({ googleClientId }) => {
-  const { signup, signinWithGoogle, signinGuest, allowGuest } =
+  const { signup, signinWithGoogle, signinGuest, allowGuest, skipProjectPage } =
     useUserContext();
+  const entryRoute = skipProjectPage ? "/dataflow" : "/projects";
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -36,7 +37,7 @@ export const SignUpForm: React.FC<{
         password,
         email: email.trim() || undefined,
       });
-      navigate("/projects");
+      navigate(entryRoute);
     } catch (err: any) {
       setError(err.body?.error || err.message || "Sign up failed.");
     } finally {
@@ -46,12 +47,12 @@ export const SignUpForm: React.FC<{
 
   const handleGoogle = async (code: string) => {
     const user = await signinWithGoogle(code);
-    if (user) navigate("/projects");
+    if (user) navigate(entryRoute);
   };
 
   const handleGuest = async () => {
     const user = await signinGuest();
-    if (user) navigate("/projects");
+    if (user) navigate(entryRoute);
   };
 
   return (

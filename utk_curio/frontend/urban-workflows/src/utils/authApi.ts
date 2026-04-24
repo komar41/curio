@@ -59,8 +59,10 @@ export interface UserData {
 }
 
 export interface PublicConfig {
-  enable_user_auth: boolean;
   allow_guest_login: boolean;
+  curio_no_auth: boolean;
+  curio_no_project: boolean;
+  skip_project_page: boolean;
   google_client_id: string;
   curio_env: string;
   shared_guest_username: string;

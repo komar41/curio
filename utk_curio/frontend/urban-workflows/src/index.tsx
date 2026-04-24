@@ -36,7 +36,7 @@ import { getAllNodeTypes } from "./registry";
 
 import FlowProvider from "./providers/FlowProvider";
 import TemplateProvider from "./providers/TemplateProvider";
-import UserProvider from "./providers/UserProvider";
+import UserProvider, { useUserContext } from "./providers/UserProvider";
 import DialogProvider from "./providers/DialogProvider";
 import { ToastProvider } from "./providers/ToastProvider";
 import { BackendHealthBanner } from "./providers/BackendHealthBanner";
@@ -69,6 +69,20 @@ const LegacyWorkflowRedirect: React.FC = () => {
   return <Navigate to={id ? `/dataflow/${id}` : "/dataflow"} replace />;
 };
 
+const HomeRedirect: React.FC = () => {
+  const { skipProjectPage } = useUserContext();
+
+  return <Navigate to={skipProjectPage ? "/dataflow" : "/projects"} replace />;
+};
+
+const ProjectsRoute: React.FC = () => {
+  const { skipProjectPage } = useUserContext();
+
+  if (skipProjectPage) return <Navigate to="/dataflow" replace />;
+
+  return <ProjectsList />;
+};
+
 const App: React.FC = () => {
   return (
     <BrowserRouter>
@@ -85,7 +99,7 @@ const App: React.FC = () => {
                       path="/projects"
                       element={
                         <RequireAuth>
-                          <ProjectsList />
+                          <ProjectsRoute />
                         </RequireAuth>
                       }
                     />
@@ -103,7 +117,7 @@ const App: React.FC = () => {
                     />
                     <Route
                       path="/"
-                      element={<Navigate to="/projects" replace />}
+                      element={<HomeRedirect />}
                     />
                   </Routes>
                 </UserProvider>

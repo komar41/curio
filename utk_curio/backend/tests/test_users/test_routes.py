@@ -92,7 +92,7 @@ class TestSignoutRoute:
         assert resp.status_code == 401
 
     def test_signout_disabled_when_auth_off(self, client, monkeypatch):
-        monkeypatch.setattr(routes, "ENABLE_USER_AUTH", False)
+        monkeypatch.setattr(routes, "CURIO_NO_AUTH", True)
         signin = _post(client, "/api/auth/signin/auto-guest")
         token = signin.get_json()["token"]
         resp = client.post(
@@ -118,7 +118,7 @@ class TestGuestRoute:
         assert first.status_code == 403
 
     def test_auto_guest_when_auth_disabled(self, client, monkeypatch):
-        monkeypatch.setattr(routes, "ENABLE_USER_AUTH", False)
+        monkeypatch.setattr(routes, "CURIO_NO_AUTH", True)
         first = _post(client, "/api/auth/signin/auto-guest")
         assert first.status_code == 200
         first_body = first.get_json()
@@ -132,7 +132,7 @@ class TestGuestRoute:
         assert first_body["token"] == second_body["token"]
 
     def test_auth_routes_blocked_when_auth_disabled(self, client, monkeypatch):
-        monkeypatch.setattr(routes, "ENABLE_USER_AUTH", False)
+        monkeypatch.setattr(routes, "CURIO_NO_AUTH", True)
         assert _signup(client).status_code == 403
         assert _post(
             client,
@@ -153,8 +153,11 @@ class TestPublicConfig:
         assert resp.status_code == 200
         data = resp.get_json()
         assert "allow_guest_login" in data
-        assert "enable_user_auth" in data
+        assert "curio_no_auth" in data
+        assert "curio_no_project" in data
+        assert "skip_project_page" in data
         assert "shared_guest_username" in data
+        assert "enable_user_auth" not in data
 
 
 class TestGuestCleanupScheduler:

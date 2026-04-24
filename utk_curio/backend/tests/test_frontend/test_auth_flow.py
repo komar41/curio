@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 def test_signup_signin_flow(app_frontend: FrontendPage, page):
     """Full auth round-trip: signup, reach projects, sign out, sign back in."""
     if not auth_enabled_env():
-        pytest.skip("Signup/signin flow is disabled when ENABLE_USER_AUTH=false")
+        pytest.skip("Signup/signin flow is disabled when CURIO_NO_AUTH=1")
 
     base = app_frontend.base_url
 

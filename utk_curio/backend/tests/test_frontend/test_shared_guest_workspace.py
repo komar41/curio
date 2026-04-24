@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from .utils import allow_guest_login_env, auth_enabled_env
+from .utils import allow_guest_login_env, auth_enabled_env, require_project_page
 
 
 def _auth_enabled() -> bool:
@@ -60,6 +60,7 @@ def _create_project(backend_url: str, token: str, project_name: str) -> dict:
 
 def test_guest_workspace_shared_across_sessions(app_frontend, current_server, browser):
     """A project created by one guest session should be visible to another."""
+    require_project_page()
     if _auth_enabled() and not _allow_guest_login():
         pytest.skip("Guest login is disabled for this session")
 

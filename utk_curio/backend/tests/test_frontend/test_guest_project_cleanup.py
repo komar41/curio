@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from .utils import allow_guest_login_env, auth_enabled_env
+from .utils import allow_guest_login_env, auth_enabled_env, require_project_page
 
 if TYPE_CHECKING:
     from .utils import FrontendPage
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 def test_guest_can_save_project(app_frontend: FrontendPage, page):
     """Guest workspace should be reachable and able to save a new dataflow."""
+    require_project_page()
     base = app_frontend.base_url
     auth_enabled = auth_enabled_env()
     allow_guest = allow_guest_login_env()

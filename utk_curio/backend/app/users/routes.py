@@ -8,9 +8,10 @@ from flask import Blueprint, g, jsonify, request
 
 from utk_curio.backend.config import (
     ALLOW_GUEST_LOGIN,
+    CURIO_NO_AUTH,
+    CURIO_NO_PROJECT,
     CURIO_ENV,
     CURIO_SHARED_GUEST_USERNAME,
-    ENABLE_USER_AUTH,
 )
 from utk_curio.backend.app.users.dependencies import get_current_token, require_auth
 from utk_curio.backend.app.users.schemas import SignInIn, SignUpIn, UserPatchIn
@@ -53,7 +54,7 @@ def _auth_disabled_response():
 
 @auth_bp.route("/signup", methods=["POST"])
 def signup_route():
-    if not ENABLE_USER_AUTH:
+    if CURIO_NO_AUTH:
         return _auth_disabled_response()
     body = request.get_json(silent=True) or {}
     data = SignUpIn(
@@ -71,7 +72,7 @@ def signup_route():
 
 @auth_bp.route("/signin", methods=["POST"])
 def signin_route():
-    if not ENABLE_USER_AUTH:
+    if CURIO_NO_AUTH:
         return _auth_disabled_response()
     body = request.get_json(silent=True) or {}
     identifier = body.get("identifier", "")
@@ -92,7 +93,7 @@ def signin_route():
 
 @auth_bp.route("/signin/google", methods=["POST"])
 def signin_google_route():
-    if not ENABLE_USER_AUTH:
+    if CURIO_NO_AUTH:
         return _auth_disabled_response()
     body = request.get_json(silent=True) or {}
     code = body.get("code", "")
@@ -107,7 +108,7 @@ def signin_google_route():
 
 @auth_bp.route("/signin/guest", methods=["POST"])
 def signin_guest_route():
-    if not ENABLE_USER_AUTH:
+    if CURIO_NO_AUTH:
         return _auth_disabled_response()
     try:
         result = signin_guest(
@@ -120,7 +121,7 @@ def signin_guest_route():
 
 @auth_bp.route("/signin/auto-guest", methods=["POST"])
 def signin_auto_guest_route():
-    if ENABLE_USER_AUTH:
+    if not CURIO_NO_AUTH:
         return jsonify({"error": "Auto guest signin is unavailable."}), 403
     try:
         result = signin_shared_guest(existing_token=get_current_token())
@@ -132,7 +133,7 @@ def signin_auto_guest_route():
 @auth_bp.route("/signout", methods=["POST"])
 @require_auth
 def signout_route():
-    if not ENABLE_USER_AUTH:
+    if CURIO_NO_AUTH:
         return jsonify({"error": "Sign out is disabled while user auth is off."}), 403
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else auth_header
@@ -164,8 +165,10 @@ def me_patch_route():
 def public_config_route():
     return jsonify(
         {
-            "enable_user_auth": ENABLE_USER_AUTH,
             "allow_guest_login": ALLOW_GUEST_LOGIN,
+            "curio_no_auth": CURIO_NO_AUTH,
+            "curio_no_project": CURIO_NO_PROJECT,
+            "skip_project_page": CURIO_NO_PROJECT,
             "google_client_id": os.environ.get("CLIENT_ID", ""),
             "curio_env": CURIO_ENV,
             "shared_guest_username": CURIO_SHARED_GUEST_USERNAME,

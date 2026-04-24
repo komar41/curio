@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .utils import signup_and_enter_new_workflow
+from .utils import require_project_page, signup_and_enter_new_workflow
 
 if TYPE_CHECKING:
     from .utils import FrontendPage
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 def test_dirty_guard_on_navigation(app_frontend: "FrontendPage", page):
     """After saving and editing, navigating away should trigger confirmation."""
+    require_project_page()
     base = app_frontend.base_url
 
     signup_and_enter_new_workflow(

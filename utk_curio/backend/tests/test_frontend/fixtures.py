@@ -138,11 +138,27 @@ def curio_servers(session_app, request):
         if key in os.environ:
             env[key] = os.environ[key]
 
+    # The E2E suite exercises the real signup / signin / guest flows, so the
+    # backend must run with user auth enabled. ``curio.py start`` defaults to
+    # ``CURIO_NO_AUTH=1`` (auto-guest mode, no login UI), which would send the
+    # browser straight to ``/projects`` and make every auth-gated test time
+    # out looking for ``Sign In`` / ``Create an account`` / ``Continue as
+    # Guest``. ``--auth`` flips ``CURIO_NO_AUTH=0`` so the login UI renders;
+    # tests that opt out (e.g. ``test_frontend_server``) branch on
+    # ``auth_enabled_env()`` and will follow the no-auth path only when the
+    # caller sets ``CURIO_NO_AUTH=1`` in the pytest process env as well.
+    extra_args: list[str] = []
+    if env.get("CURIO_NO_AUTH", "0") not in ("1", "true", "yes", "on"):
+        extra_args.append("--auth")
+    if env.get("CURIO_NO_PROJECT", "0") in ("1", "true", "yes", "on"):
+        extra_args.append("--no-project")
+
     process = subprocess.Popen(
         [
             "python", "curio.py", "start",
             "--backend-port", str(backend_port),
             "--sandbox-port", str(sandbox_port),
+            *extra_args,
         ],
         cwd=REPO_ROOT,
         env=env,

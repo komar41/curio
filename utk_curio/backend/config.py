@@ -24,7 +24,10 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 CURIO_ENV = os.environ.get("CURIO_ENV", "dev")  # dev | prod
 
-ENABLE_USER_AUTH = _env_flag("ENABLE_USER_AUTH", True)
+CURIO_NO_PROJECT = _env_flag("CURIO_NO_PROJECT", False)
+# Skipping the projects page implies skipping auth as well: the shared-guest
+# auto-signin path is the only way to reach the canvas without a login form.
+CURIO_NO_AUTH = _env_flag("CURIO_NO_AUTH", False) or CURIO_NO_PROJECT
 
 ALLOW_GUEST_LOGIN = _env_flag("ALLOW_GUEST_LOGIN", CURIO_ENV != "prod")
 
