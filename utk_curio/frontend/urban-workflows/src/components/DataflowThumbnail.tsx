@@ -4,7 +4,6 @@ import { GraphPreview } from "../api/projectsApi";
 const NODE_COLORS: Record<string, string> = {
   DATA_LOADING: "#3498db",
   DATA_EXPORT: "#3498db",
-  DATA_CLEANING: "#3498db",
   DATA_TRANSFORMATION: "#3498db",
   DATA_SUMMARY: "#3498db",
   COMPUTATION_ANALYSIS: "#8e44ad",
@@ -14,9 +13,7 @@ const NODE_COLORS: Record<string, string> = {
   CONSTANTS: "#8e44ad",
   VIS_UTK: "#1abc9c",
   VIS_VEGA: "#1abc9c",
-  VIS_TABLE: "#1abc9c",
-  VIS_TEXT: "#1abc9c",
-  VIS_IMAGE: "#1abc9c",
+  VIS_SIMPLE: "#1abc9c",
   COMMENTS: "#95a5a6",
 };
 

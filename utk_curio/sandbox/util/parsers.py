@@ -42,14 +42,14 @@ def checkIOType(data, nodeType, input=True):
 def validate_input(data, nodeType):
     if isinstance(data, list):
         return
-    if nodeType in ['DATA_EXPORT', 'DATA_CLEANING']:
+    if nodeType == 'DATA_EXPORT':
         check_dataframe_input(data, nodeType)
     elif nodeType == 'DATA_TRANSFORMATION':
         check_transformation_input(data, nodeType)
 
 # Output Validation
 def validate_output(data, nodeType):
-    if nodeType in ['DATA_LOADING', 'DATA_CLEANING', 'DATA_TRANSFORMATION']:
+    if nodeType in ['DATA_LOADING', 'DATA_TRANSFORMATION']:
         check_valid_output(data, nodeType)
     elif nodeType == 'DATA_EXPORT':
         if data.get('dataType') in ['', None]:

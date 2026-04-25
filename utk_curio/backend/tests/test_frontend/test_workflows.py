@@ -91,7 +91,6 @@ class TestWorkflowCanvas:
         """Return a generous timeout for nodes that execute heavy data ops."""
         if node.type in {
             "DATA_LOADING",
-            "DATA_CLEANING",
             "DATA_TRANSFORMATION",
             "COMPUTATION_ANALYSIS",
         }:
@@ -390,7 +389,7 @@ class TestWorkflowCanvas:
                 )
 
             else:
-                # passive nodes (MERGE_FLOW, VIS_IMAGE, …): just verify the
+                # passive nodes (MERGE_FLOW, VIS_SIMPLE, …): just verify the
                 # resizable container rendered
                 resizable = node_el.locator(f'[id="{node.id}resizable"]')
                 assert resizable.count() >= 1, (

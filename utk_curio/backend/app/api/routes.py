@@ -55,21 +55,18 @@ attributeIds = {
 # Initialised with hardcoded defaults so provenance and templates work even if
 # the frontend hasn't registered yet (e.g. backend starts before frontend).
 _node_type_registry: dict = {
-    "DATA_LOADING":          {"inputTypes": [],                                                   "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
-    "DATA_EXPORT":           {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": []},
-    "DATA_CLEANING":         {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
-    "DATA_TRANSFORMATION":   {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
-    "COMPUTATION_ANALYSIS":  {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"], "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
-    "FLOW_SWITCH":           {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"], "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
-    "VIS_UTK":               {"inputTypes": ["GEODATAFRAME"],                                     "outputTypes": ["GEODATAFRAME"]},
-    "VIS_VEGA":              {"inputTypes": ["DATAFRAME"],                                        "outputTypes": ["DATAFRAME"]},
-    "VIS_TABLE":             {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
-    "VIS_TEXT":              {"inputTypes": ["VALUE"],                                             "outputTypes": ["VALUE"]},
-    "VIS_IMAGE":             {"inputTypes": ["LIST"],                                             "outputTypes": ["LIST"]},
-    "CONSTANTS":             {"inputTypes": [],                                                   "outputTypes": ["VALUE"]},
-    "DATA_POOL":             {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
-    "MERGE_FLOW":            {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"], "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
-    "DATA_SUMMARY":          {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                        "outputTypes": ["JSON"]},
+    "DATA_LOADING":          {"inputTypes": [],                                                             "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
+    "DATA_EXPORT":           {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                                 "outputTypes": []},
+    "DATA_TRANSFORMATION":   {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                                 "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
+    "COMPUTATION_ANALYSIS":  {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"],        "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
+    "FLOW_SWITCH":           {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"],        "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
+    "VIS_UTK":               {"inputTypes": ["GEODATAFRAME"],                                              "outputTypes": ["GEODATAFRAME"]},
+    "VIS_VEGA":              {"inputTypes": ["DATAFRAME"],                                                 "outputTypes": ["DATAFRAME"]},
+    "VIS_SIMPLE":            {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE"],                        "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE"]},
+    "CONSTANTS":             {"inputTypes": [],                                                             "outputTypes": ["VALUE"]},
+    "DATA_POOL":             {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                                 "outputTypes": ["DATAFRAME", "GEODATAFRAME"]},
+    "MERGE_FLOW":            {"inputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"],        "outputTypes": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"]},
+    "DATA_SUMMARY":          {"inputTypes": ["DATAFRAME", "GEODATAFRAME"],                                 "outputTypes": ["JSON"]},
 }
 
 def get_output_types(node_type: str) -> list:

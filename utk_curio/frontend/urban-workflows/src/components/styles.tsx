@@ -1064,7 +1064,6 @@ const headerIconStyle: CSS.Properties = {
 const nodeTypeBorderColor: Record<string, string> = {
     [NodeType.DATA_LOADING]: "#3498db",
     [NodeType.DATA_EXPORT]: "#3498db",
-    [NodeType.DATA_CLEANING]: "#3498db",
     [NodeType.DATA_TRANSFORMATION]: "#3498db",
     [NodeType.DATA_SUMMARY]: "#3498db",
     [NodeType.COMPUTATION_ANALYSIS]: "#8e44ad",
@@ -1074,9 +1073,7 @@ const nodeTypeBorderColor: Record<string, string> = {
     [NodeType.CONSTANTS]: "#8e44ad",
     [NodeType.VIS_UTK]: "#1abc9c",
     [NodeType.VIS_VEGA]: "#1abc9c",
-    [NodeType.VIS_TABLE]: "#1abc9c",
-    [NodeType.VIS_TEXT]: "#1abc9c",
-    [NodeType.VIS_IMAGE]: "#1abc9c",
+    [NodeType.VIS_SIMPLE]: "#1abc9c",
     [NodeType.COMMENTS]: "#95a5a6",
 };
 

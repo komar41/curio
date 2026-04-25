@@ -37,6 +37,7 @@ WORKFLOW_FILES = [
     "docs/examples/dataflows/DataPool_UTK.json",
 
     "docs/examples/dataflows/Image.json",
+    "docs/examples/dataflows/SimpleView_Table.json",
     "docs/examples/dataflows/Merge.json",
     "docs/examples/dataflows/MergeFlowDataPool.json",
 
@@ -44,7 +45,7 @@ WORKFLOW_FILES = [
     "docs/examples/dataflows/Interaction_UTK.json",
     "docs/examples/dataflows/Interaction_Vega.json",
 
-    "docs/examples/dataflows/Number Multiplier (Widget).json",
+    "docs/examples/dataflows/Number_Multiplier_Widget.json",
 
     "docs/examples/dataflows/Vega.json",
 

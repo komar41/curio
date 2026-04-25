@@ -120,10 +120,10 @@ All node types are enumerated in `src/constants.ts` as the `NodeType` enum. Ther
 
 | Category | Node Types |
 |---|---|
-| Data | `DATA_LOADING`, `DATA_CLEANING`, `DATA_TRANSFORMATION`, `DATA_SUMMARY`, `DATA_EXPORT`, `DATA_POOL` |
+| Data | `DATA_LOADING`, `DATA_TRANSFORMATION`, `DATA_SUMMARY`, `DATA_EXPORT`, `DATA_POOL` |
 | Computation | `COMPUTATION_ANALYSIS`, `MERGE_FLOW`, `FLOW_SWITCH`, `CONSTANTS` |
 | Map visualization | `VIS_UTK` |
-| Chart/table visualization | `VIS_VEGA`, `VIS_TABLE`, `VIS_TEXT`, `VIS_IMAGE` |
+| Chart/table visualization | `VIS_VEGA`, `VIS_SIMPLE` |
 | Annotation | `COMMENTS` |
 
 Each type is registered in `src/registry/descriptors.ts` with a `NodeDescriptor` and in the backend route file with its allowed input/output data types.
@@ -346,7 +346,7 @@ The sandbox runs as a completely separate Flask process. It:
 
 ## Interactions and Propagation
 
-Visualization nodes (`VIS_UTK`, `VIS_VEGA`, `VIS_TABLE`) can emit user interactions (selections, filters, brushes) that flow **upstream** through the dataflow graph, causing upstream nodes to re-execute with the filtered subset.
+Visualization nodes (`VIS_UTK`, `VIS_VEGA`, `VIS_SIMPLE`) can emit user interactions (selections, filters, brushes) that flow **upstream** through the dataflow graph, causing upstream nodes to re-execute with the filtered subset.
 
 ### IInteraction
 
