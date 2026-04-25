@@ -49,6 +49,9 @@ def create_app(config_class=config_class):
     from utk_curio.backend.app.projects.routes import projects_bp
     app.register_blueprint(projects_bp)
 
+    from utk_curio.backend.app.notebooks import notebooks_bp
+    app.register_blueprint(notebooks_bp)
+
     # Non-prod DB stub endpoints for Playwright E2E tests.
     # Lets Playwright seed users / projects directly without the signup form.
     if _is_dev():

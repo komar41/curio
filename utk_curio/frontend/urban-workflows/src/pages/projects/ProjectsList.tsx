@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import CSS from "csstype";
 import { useNavigate, Link } from "react-router-dom";
 import { useUserContext } from "../../providers/UserProvider";
 import { projectsApi, ProjectSummary } from "../../api/projectsApi";
+import { notebookToTrill } from "../../NotebookConvertor";
 import logo from "assets/curio-2.png";
 import DataflowThumbnail from "../../components/DataflowThumbnail";
 
@@ -24,6 +25,7 @@ const ProjectsList: React.FC = () => {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [search, setSearch] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: ProjectSummary } | null>(null);
+  const importNotebookRef = useRef<HTMLInputElement>(null);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -97,10 +99,38 @@ const ProjectsList: React.FC = () => {
     }
   };
 
+  const handleNotebookImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event: ProgressEvent<FileReader>) => {
+      try {
+        const json = JSON.parse(event.target?.result as string) as Record<string, unknown>;
+        const trillSpec = await notebookToTrill(json, process.env.BACKEND_URL as string);
+        const name = file.name.replace(/\.ipynb$/i, "");
+        await projectsApi.create({ name, spec: trillSpec as unknown as Record<string, unknown>, outputs: [] });
+        loadProjects();
+      } catch (err) {
+        console.error("Failed to import Jupyter notebook:", err);
+      }
+    };
+    reader.onerror = (event: ProgressEvent<FileReader>) =>
+      console.error("Error reading notebook file:", event.target?.error);
+    reader.readAsText(file);
+  };
+
   const accent = (a: string) => ACCENT_COLORS[a] || ACCENT_COLORS.peach;
 
   return (
     <div style={pageStyle}>
+      <input
+        type="file"
+        accept=".ipynb"
+        ref={importNotebookRef}
+        style={{ display: "none" }}
+        onChange={handleNotebookImport}
+        onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
+      />
       {/* Top Nav Bar */}
       <header style={topBarStyle}>
         <Link to="/projects" style={logoLinkStyle}>
@@ -137,6 +167,12 @@ const ProjectsList: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
               style={searchInputStyle}
             />
+            <button
+              style={importNotebookBtnStyle}
+              onClick={() => importNotebookRef.current?.click()}
+            >
+              Import Jupyter notebook
+            </button>
             <button
               style={newWorkflowBtnStyle}
               onClick={() => navigate("/dataflow/new")}
@@ -370,6 +406,18 @@ const pageTitleStyle: CSS.Properties = {
   fontWeight: 600,
   color: "#1E1F23",
   margin: 0,
+};
+
+const importNotebookBtnStyle: CSS.Properties = {
+  height: "38px",
+  padding: "0 16px",
+  backgroundColor: "#fff",
+  color: "#1E1F23",
+  border: "1px solid #D0D0D5",
+  borderRadius: "6px",
+  fontSize: "14px",
+  fontWeight: 500,
+  cursor: "pointer",
 };
 
 const newWorkflowBtnStyle: CSS.Properties = {

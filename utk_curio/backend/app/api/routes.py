@@ -16,7 +16,6 @@ import zlib
 import time
 import mmap
 from pathlib import Path
-import re
 import pandas as pd
 import geopandas as gpd
 from openai import OpenAI
@@ -563,6 +562,7 @@ def process_python_code():
             pass
     finally:
         pass
+
 
 @bp.route('/installPackages', methods=['POST'])
 def install_packages():
