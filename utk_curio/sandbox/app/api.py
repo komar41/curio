@@ -1,7 +1,6 @@
 from flask import request, abort, jsonify
 import json
 import re
-import subprocess
 import sys
 import geopandas as gpd
 import pandas as pd
@@ -14,7 +13,22 @@ from pathlib import Path
 
 from shapely import wkt
 
+from utk_curio.sandbox.app.worker import execute_code
+
 _VALID_PACKAGE_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._\-]*(\[[\w,\s]+\])?(===?|~=|!=|>=?|<=?[a-zA-Z0-9._\-*]+)?$')
+
+_pool = None
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        from concurrent.futures import ProcessPoolExecutor
+        from utk_curio.sandbox.app.worker import _worker_init
+        import atexit
+        n_workers = int(os.environ.get('CURIO_WORKER_POOL_SIZE', '2'))
+        _pool = ProcessPoolExecutor(max_workers=n_workers, initializer=_worker_init)
+        atexit.register(_pool.shutdown, wait=False)
+    return _pool
 
 DATA_DIR = "./data"
 
@@ -97,6 +111,7 @@ def list_datasets():
 
 @app.route('/install', methods=['POST'])
 def install_packages():
+    import subprocess
     packages = request.json.get('packages', [])
     if not packages:
         abort(400, "No packages specified")
@@ -126,58 +141,34 @@ def install_packages():
 # @cache.cached(make_cache_key=make_key)
 def exec():
     import time
+    import traceback
     start_time = time.time()
-    app.logger.info(f'/exec: Request begin')
+    app.logger.info('/exec: Request begin')
 
-    # print(request.json['code'], flush=True)
-
-    if(request.json['code'] == None):
+    if request.json.get('code') is None:
         abort(400, "Code was not included in the post request")
 
-    # Load default python wrapper code
-    full_code = open('sandbox/python_wrapper.txt', 'r').read()
-
-    # Set path to be relative to the place where curio is called
-    original_dir = os.getcwd()
-    launch_dir = os.environ.get("CURIO_LAUNCH_CWD", os.getcwd())
-    os.chdir(launch_dir)
-
-    code = request.json['code']
+    code      = request.json['code']
     file_path = request.json['file_path']
-    nodeType = request.json['nodeType']
-    dataType = request.json['dataType']
-    
-    full_code = full_code.replace('{userCode}', str(code))
-    full_code = full_code.replace('{filePath}', str(file_path))
-    full_code = full_code.replace('{nodeType}', str(nodeType))
-    full_code = full_code.replace('{dataType}', str(dataType))
+    node_type = request.json['nodeType']
+    data_type = request.json['dataType']
+    launch_dir = os.environ.get('CURIO_LAUNCH_CWD', os.getcwd())
+    timeout   = int(os.environ.get('CURIO_EXEC_TIMEOUT', '120'))
 
-    command = ['python', '-']
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    stdout, stderr = process.communicate(full_code)
+    pool = _get_pool()
+    future = pool.submit(execute_code, code, str(file_path), str(node_type), str(data_type), launch_dir)
 
-    stdout = [item for item in stdout.split("\n") if item != '']
+    try:
+        result = future.result(timeout=timeout)
+    except Exception:
+        result = {
+            'stdout': [],
+            'stderr': traceback.format_exc(),
+            'output': {'path': '', 'dataType': 'str'},
+        }
 
-    if(len(stdout) > 0):
-        output = json.loads(stdout[-1])
-    else:
-        output = {}
-        output['path'] = ""
-        output['dataType'] = "str"
-
-    jsonOutput = {
-        "stdout": stdout[0:-1], # just get prints, remove output itself
-        "stderr": stderr,
-        "output": output
-    }
-
-    # print("----------", jsonOutput, flush=True)
-
-    app.logger.info(f'/exec: Request end in time: {(time.time() - start_time) / 60} mins')
-
-    os.chdir(original_dir)
-
-    return jsonify(jsonOutput)
+    app.logger.info(f'/exec: Request end in {(time.time() - start_time):.2f}s')
+    return jsonify(result)
 
 @app.route('/toLayers', methods=['POST'])
 def toLayers():
