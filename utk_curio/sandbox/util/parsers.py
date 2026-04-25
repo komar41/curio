@@ -448,8 +448,15 @@ def save_to_duckdb(value, node_id=None):
     try:
         art_id = _make_id()
 
+        if value is None:
+            con.execute(
+                "INSERT INTO artifacts (id, node_id, kind) VALUES (?, ?, ?)",
+                [art_id, node_id, 'null']
+            )
+            kind_logged = 'null'
+
         # --- Tuple: split into children + parent pointer row ---
-        if isinstance(value, tuple):
+        elif isinstance(value, tuple):
             child_ids = [save_to_duckdb(child, node_id=node_id) for child in value]
             con.execute(
                 "INSERT INTO artifacts (id, node_id, kind, value_json) VALUES (?, ?, ?, ?)",
@@ -599,7 +606,9 @@ def load_from_duckdb(art_id):
 
         kind, v_int, v_float, v_str, v_json, blob = row
 
-        if kind == 'bool':
+        if kind == 'null':
+            result = None
+        elif kind == 'bool':
             result = bool(v_int)
         elif kind == 'int':
             result = v_int
@@ -669,6 +678,7 @@ def load_from_duckdb(art_id):
 
 def detect_kind(obj):
     """Return the Curio 'kind' string for a Python object (no conversion)."""
+    if obj is None: return 'null'
     # bool MUST come before int
     if isinstance(obj, bool): return 'bool'
     if isinstance(obj, int): return 'int'
