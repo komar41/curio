@@ -121,6 +121,7 @@ interface FlowContextProps {
     markNodeExecuted: (nodeId: string) => void;
     markNodeStale: (nodeId: string) => void;
     playAllNodes: () => void;
+    playNodesUpTo: (targetNodeId: string) => void;
     signalNodeExecDone: (nodeId: string) => void;
 }
 
@@ -221,6 +222,7 @@ export const FlowContext = createContext<FlowContextProps>({
     markNodeExecuted: () => {},
     markNodeStale: () => {},
     playAllNodes: () => {},
+    playNodesUpTo: () => {},
     signalNodeExecDone: () => {},
 });
 
@@ -761,6 +763,60 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         triggerLevel(0);
     }
 
+    function playNodesUpTo(targetNodeId: string) {
+        const currentNodes = reactFlow.getNodes();
+        const currentEdges = reactFlow.getEdges();
+
+        const directedEdges = currentEdges.filter(
+            e => !(e.sourceHandle === "in/out" && e.targetHandle === "in/out")
+        );
+
+        const predecessors = new Map<string, string[]>();
+        for (const n of currentNodes) predecessors.set(n.id, []);
+        for (const e of directedEdges) {
+            predecessors.get(e.target)?.push(e.source);
+        }
+
+        const ancestorIds = new Set<string>();
+        const queue = [targetNodeId];
+        while (queue.length > 0) {
+            const id = queue.shift()!;
+            for (const pred of predecessors.get(id) ?? []) {
+                if (!ancestorIds.has(pred)) {
+                    ancestorIds.add(pred);
+                    queue.push(pred);
+                }
+            }
+        }
+        ancestorIds.add(targetNodeId);
+
+        // Also include degree-0 nodes (no directed edges at all)
+        const directedEdgeNodeIds = new Set<string>();
+        for (const e of directedEdges) {
+            directedEdgeNodeIds.add(e.source);
+            directedEdgeNodeIds.add(e.target);
+        }
+        for (const n of currentNodes) {
+            if (!directedEdgeNodeIds.has(n.id)) ancestorIds.add(n.id);
+        }
+
+        // Skip ancestors that already ran successfully; always keep the target
+        const subgraphNodes = currentNodes.filter(n =>
+            ancestorIds.has(n.id) &&
+            (n.id === targetNodeId || n.data.output?.code !== "success")
+        );
+        const subgraphNodeIds = new Set(subgraphNodes.map(n => n.id));
+        const subgraphEdges = currentEdges.filter(
+            e => subgraphNodeIds.has(e.source) && subgraphNodeIds.has(e.target)
+        );
+
+        const levels = computeTopologicalLevels(subgraphNodes, subgraphEdges);
+        if (!levels.length) return;
+
+        playAllStateRef.current = { levels, currentLevel: 0, pending: new Set() };
+        triggerLevel(0);
+    }
+
     // a box generated a new output. Propagate it to directly connected boxes
     const applyNewOutput = (newOutput: IOutput) => {
         const currentEdges = reactFlow.getEdges();
@@ -1021,6 +1077,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 updatePositionDashboard,
                 applyNewOutput,
                 playAllNodes,
+                playNodesUpTo,
                 signalNodeExecDone,
 
                 // NEW CODE

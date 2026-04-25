@@ -117,6 +117,7 @@ export const NodeContainer = ({
         workflowGoal,
         acceptSuggestion,
         nodeExecStatus,
+        playNodesUpTo,
     } = useFlowContext();
     const { getNodes, getEdges } = useReactFlow();
     const { getTemplates, deleteTemplate, fetchTemplates } = useTemplateContext();
@@ -744,11 +745,7 @@ export const NodeContainer = ({
                                                 color: "rgb(251, 170, 105)",
                                             }}
                                             onClick={() => {
-                                                setOutputCallback({
-                                                    code: "exec",
-                                                    content: "",
-                                                });
-                                                sendCodeToWidgets(code); // will resolve markers
+                                                playNodesUpTo(data.nodeId);
                                                 if(AIModeRef.current)
                                                     generateSubtaskFromExec((code ? code : ""), data.nodeType, workflowGoal);
                                             }}
