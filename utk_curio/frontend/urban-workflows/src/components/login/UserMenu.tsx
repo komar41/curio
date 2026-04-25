@@ -48,18 +48,21 @@ export const UserMenu = () => {
           <span style={avatarInitialsStyle}>{initials}</span>
         )}
       </div>
+      
       <div style={infoColumnStyle}>
         <span style={nameStyle} title={displayName}>
           {displayName}
         </span>
-        <button
-          type="button"
-          style={signoutBtnStyle}
-          onClick={handleSignOut}
-          data-testid="signout-button"
-        >
-          Logout
-        </button>
+        {enableUserAuth && (
+          <button
+            type="button"
+            style={signoutBtnStyle}
+            onClick={handleSignOut}
+            data-testid="signout-button"
+          >
+            Logout
+          </button>
+        )}
       </div>
     </div>
   );

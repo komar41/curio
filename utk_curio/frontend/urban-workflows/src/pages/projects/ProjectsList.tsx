@@ -110,15 +110,17 @@ const ProjectsList: React.FC = () => {
           <div style={avatarStyle}>{initials}</div>
           <div style={userInfoColumnStyle}>
             <span style={userNameStyle}>{user?.name || "User"}</span>
-            <button
-              style={signoutBtnStyle}
-              onClick={async () => {
-                await signout();
-                navigate("/auth/signin");
-              }}
-            >
-              Logout
-            </button>
+            {enableUserAuth && (
+              <button
+                style={signoutBtnStyle}
+                onClick={async () => {
+                  await signout();
+                  navigate("/auth/signin");
+                }}
+              >
+                Logout
+              </button>
+            )}
           </div>
         </div>
       </header>
