@@ -16,6 +16,7 @@ import zlib
 import time
 import mmap
 from pathlib import Path
+import re
 import pandas as pd
 import geopandas as gpd
 from openai import OpenAI
