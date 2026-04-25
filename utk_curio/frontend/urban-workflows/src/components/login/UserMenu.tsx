@@ -66,14 +66,11 @@ export const UserMenu = () => {
 };
 
 const containerStyle: CSS.Properties = {
-  position: "fixed",
-  top: "10px",
-  right: "20px",
+  marginLeft: "auto",
   display: "flex",
   alignItems: "center",
   gap: "8px",
-  zIndex: 300,
-  pointerEvents: "auto",
+  fontFamily: "Rubik, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
 const nameStyle: CSS.Properties = {
@@ -125,9 +122,7 @@ const signoutBtnStyle: CSS.Properties = {
 };
 
 const loginStyle: CSS.Properties = {
-  position: "fixed",
-  top: "14px",
-  right: "20px",
+  marginLeft: "auto",
   border: "none",
   backgroundColor: "transparent",
   padding: "6px 10px",
@@ -135,6 +130,5 @@ const loginStyle: CSS.Properties = {
   borderRadius: "4px",
   fontWeight: "bold",
   color: "white",
-  zIndex: 300,
   textDecoration: "none",
 };

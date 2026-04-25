@@ -16,7 +16,6 @@ import { useToastContext } from "../providers/ToastProvider";
 import { NodeType, EdgeType } from "../constants";
 import { getAllNodeTypes } from "../registry";
 import UniversalNode from "./UniversalNode";
-import { UserMenu } from "./login/UserMenu";
 import BiDirectionalEdge from "./edges/BiDirectionalEdge";
 import { RightClickMenu } from "./styles";
 import { useRightClickMenu } from "../hook/useRightClickMenu";
@@ -406,7 +405,6 @@ export function MainCanvas() {
                     onClose={() => {deleteFloatingPanel(key)}}
                 />
             ))}
-            <UserMenu />
             <ToolsMenu />
             <UpMenu
                 setDashBoardMode={(value) => handleDashboardToggle(value)}

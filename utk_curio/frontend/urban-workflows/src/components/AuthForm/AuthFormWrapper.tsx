@@ -26,12 +26,12 @@ const outerStyle: CSS.Properties = {
   display: "flex",
   minHeight: "100vh",
   fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+    "Rubik, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
 const leftPanelStyle: CSS.Properties = {
   width: "42%",
-  backgroundColor: "#0F0F11",
+  backgroundColor: "#1E1F23",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -57,7 +57,7 @@ const taglineStyle: CSS.Properties = {
 
 const rightPanelStyle: CSS.Properties = {
   width: "58%",
-  backgroundColor: "#ffffff",
+  backgroundColor: "#f0f0f0",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

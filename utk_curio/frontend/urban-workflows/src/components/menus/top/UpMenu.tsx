@@ -8,16 +8,13 @@ import {
     useFlowContext,
     useNodeActionsContext,
 } from "../../../providers/FlowProvider";
-import { useReactFlow } from "reactflow";
 import { useCode } from "../../../hook/useCode";
-import { TrillGenerator } from "../../../TrillGenerator";
 import styles from "./UpMenu.module.css";
 import clsx from "clsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCubes,
     faDatabase,
-    faFileExport,
     faFileImport,
     faFolderOpen,
     faFloppyDisk,
@@ -30,10 +27,10 @@ import {
     faCircleQuestion,
 } from "@fortawesome/free-solid-svg-icons";
 import logo from "assets/curio-2.png";
+import { UserMenu } from "components/login/UserMenu";
 import introJs from "intro.js";
 import "intro.js/introjs.css";
 import { useNavigate } from "react-router-dom";
-import { projectsApi, ProjectSummary } from "../../../api/projectsApi";
 import { useUserContext } from "../../../providers/UserProvider";
 
 export default function UpMenu({
@@ -53,8 +50,6 @@ export default function UpMenu({
     const [datasetsOpen, setDatasetsOpen] = useState(false);
     const [packagesOpen, setPackagesOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
-    const [savedSubmenuOpen, setSavedSubmenuOpen] = useState(false);
-    const [savedProjects, setSavedProjects] = useState<ProjectSummary[]>([]);
     const [saving, setSaving] = useState(false);
     const [aiModeOn, setAiModeOn] = useState(false);
 
@@ -62,8 +57,6 @@ export default function UpMenu({
     const loadTrillInputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
     const { skipProjectPage } = useUserContext();
-    const { getNodes, getEdges } = useReactFlow();
-
     const {
         workflowNameRef,
         projectDirty,
@@ -84,7 +77,6 @@ export default function UpMenu({
     const { loadTrill } = useCode();
 
     const toggleMenu = (menu: string) => {
-        setSavedSubmenuOpen(false);
         setActiveMenu((prev) => (prev === menu ? null : menu));
     };
 
@@ -142,26 +134,6 @@ export default function UpMenu({
         setAIMode(next);
     };
 
-    const exportTrill = () => {
-        const trillSpec = TrillGenerator.generateTrill(
-            getNodes(),
-            getEdges(),
-            workflowNameRef.current,
-            "",
-            packages,
-        );
-        const jsonString = JSON.stringify(trillSpec, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `${workflowNameRef.current}.json`;
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setActiveMenu(null);
-    };
-
     const handleNewWorkflow = () => {
         if (projectDirty && !window.confirm("You have unsaved changes. Continue?")) {
             return;
@@ -169,27 +141,13 @@ export default function UpMenu({
         discardProject();
         cleanCanvas();
         setActiveMenu(null);
-        setSavedSubmenuOpen(false);
         navigate("/dataflow/new");
-    };
-
-    const refreshSavedProjects = async () => {
-        try {
-            const items = await projectsApi.list({
-                scope: "recent",
-                sort: "last_opened",
-            });
-            setSavedProjects(items);
-        } catch {
-            // Keep the previous list; reopening the submenu will retry.
-        }
     };
 
     const handleSave = async () => {
         setSaving(true);
         try {
             await saveCurrentProject();
-            await refreshSavedProjects();
         } catch (err: any) {
             console.error("Save failed:", err);
             alert(`Save failed: ${err?.message || "unknown error"}`);
@@ -207,37 +165,11 @@ export default function UpMenu({
         setSaving(true);
         try {
             await saveAsNewProject(name);
-            await refreshSavedProjects();
         } catch (err) {
             console.error("Save As failed:", err);
         }
         setSaving(false);
         setActiveMenu(null);
-    };
-
-    const handleOpenSavedWorkflows = async () => {
-        const nextOpen = !savedSubmenuOpen;
-        setSavedSubmenuOpen(nextOpen);
-        if (!nextOpen) return;
-
-        try {
-            const items = await projectsApi.list({
-                scope: "recent",
-                sort: "last_opened",
-            });
-            setSavedProjects(items);
-        } catch {
-            setSavedProjects([]);
-        }
-    };
-
-    const handleOpenProject = (id: string) => {
-        if (projectDirty && !window.confirm("You have unsaved changes. Continue?")) {
-            return;
-        }
-        setActiveMenu(null);
-        setSavedSubmenuOpen(false);
-        navigate(`/dataflow/${id}`);
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -282,7 +214,6 @@ export default function UpMenu({
                 !menuBarRef.current.contains(event.target as Node)
             ) {
                 setActiveMenu(null);
-                setSavedSubmenuOpen(false);
             }
         };
 
@@ -387,118 +318,41 @@ export default function UpMenu({
                     </button>
                     {activeMenu === "file" && (
                         <div className={styles.dropDownMenu} onClick={(e) => e.stopPropagation()}>
-                            {/* Project-backed entries (New dataflow / Saved dataflows / Save /
-                                Save as) are hidden when Curio runs in --no-project mode
-                                (CURIO_NO_PROJECT=1): there is no per-user project list to
-                                read from or write to, and "New dataflow" routes to
-                                /dataflow/new which only makes sense alongside the projects
-                                page. */}
+                            {!skipProjectPage && (
+                                <div className={styles.dropDownRow} onClick={handleNewWorkflow}>
+                                    <FontAwesomeIcon className={styles.dropDownIcon} icon={faPlus} />
+                                    <button className={styles.noStyleButton}>New dataflow</button>
+                                </div>
+                            )}
+                            <div className={styles.dropDownRow} onClick={loadTrillFile}>
+                                <FontAwesomeIcon className={styles.dropDownIcon} icon={faFileImport} />
+                                <button className={styles.noStyleButton}>Load dataflow</button>
+                            </div>
                             {!skipProjectPage && (
                                 <>
-                                    <div className={styles.dropDownRow} onClick={handleNewWorkflow}>
-                                        <FontAwesomeIcon className={styles.dropDownIcon} icon={faPlus} />
-                                        <button className={styles.noStyleButton}>New dataflow</button>
+                                    <div className={styles.dropDownRow} onClick={handleSave}>
+                                        <FontAwesomeIcon className={styles.dropDownIcon} icon={faFloppyDisk} />
+                                        <button className={styles.noStyleButton} disabled={saving}>
+                                            {saving ? "Saving..." : "Save dataflow"}
+                                        </button>
+                                    </div>
+                                    <div className={styles.dropDownRow} onClick={handleSaveAs}>
+                                        <FontAwesomeIcon className={styles.dropDownIcon} icon={faFloppyDisk} />
+                                        <button className={styles.noStyleButton}>Save dataflow as...</button>
                                     </div>
                                     <div className={styles.dropDownDivider} />
                                     <div
-                                        className={clsx(
-                                            styles.dropDownRow,
-                                            savedSubmenuOpen && styles.dropDownRowActive,
-                                        )}
-                                        onClick={handleOpenSavedWorkflows}
+                                        className={styles.dropDownRow}
+                                        onClick={() => {
+                                            navigate("/projects");
+                                            setActiveMenu(null);
+                                        }}
                                     >
-                                        <FontAwesomeIcon
-                                            className={styles.dropDownIcon}
-                                            icon={faFolderOpen}
-                                        />
-                                        <button className={styles.noStyleButton}>Saved dataflows</button>
-                                    </div>
-                                    {savedSubmenuOpen && (
-                                        <div
-                                            className={styles.subMenu}
-                                            data-testid="saved-workflows-submenu"
-                                        >
-                                            {savedProjects.length === 0 && (
-                                                <div
-                                                    className={styles.subMenuItem}
-                                                    style={{ opacity: 0.5 }}
-                                                    data-testid="saved-workflows-empty"
-                                                >
-                                                    No saved projects
-                                                </div>
-                                            )}
-                                            {savedProjects.map((project) => (
-                                                <div
-                                                    key={project.id}
-                                                    className={styles.subMenuItem}
-                                                    onClick={() => handleOpenProject(project.id)}
-                                                    data-testid="saved-workflows-item"
-                                                >
-                                                    {project.name}
-                                                </div>
-                                            ))}
-                                            <div
-                                                className={styles.subMenuItem}
-                                                style={{
-                                                    borderTop: "1px solid #333",
-                                                    fontStyle: "italic",
-                                                }}
-                                                onClick={() => {
-                                                    navigate("/projects");
-                                                    setActiveMenu(null);
-                                                    setSavedSubmenuOpen(false);
-                                                }}
-                                            >
-                                                View all projects
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className={styles.dropDownDivider} />
-                                </>
-                            )}
-                            <div className={styles.dropDownRow} onClick={loadTrillFile}>
-                                <FontAwesomeIcon
-                                    className={styles.dropDownIcon}
-                                    icon={faFileImport}
-                                />
-                                <button className={styles.noStyleButton}>
-                                    Import specification
-                                </button>
-                            </div>
-                            {!skipProjectPage && (
-                                <>
-                                    <div className={styles.dropDownDivider} />
-                                    <div className={styles.dropDownRow} onClick={handleSave}>
-                                        <FontAwesomeIcon
-                                            className={styles.dropDownIcon}
-                                            icon={faFloppyDisk}
-                                        />
-                                        <button className={styles.noStyleButton} disabled={saving}>
-                                            {saving ? "Saving..." : "Save specification"}
-                                        </button>
-                                    </div>
-                                    <div className={styles.dropDownDivider} />
-                                    <div className={styles.dropDownRow} onClick={handleSaveAs}>
-                                        <FontAwesomeIcon
-                                            className={styles.dropDownIcon}
-                                            icon={faFloppyDisk}
-                                        />
-                                        <button className={styles.noStyleButton}>
-                                            Save as...
-                                        </button>
+                                        <FontAwesomeIcon className={styles.dropDownIcon} icon={faFolderOpen} />
+                                        <button className={styles.noStyleButton}>Go to projects</button>
                                     </div>
                                 </>
                             )}
-                            <div className={styles.dropDownDivider} />
-                            <div className={styles.dropDownRow} onClick={exportTrill}>
-                                <FontAwesomeIcon
-                                    className={styles.dropDownIcon}
-                                    icon={faFileExport}
-                                />
-                                <button className={styles.noStyleButton}>
-                                    Export specification
-                                </button>
-                            </div>
                         </div>
                     )}
                 </div>
@@ -611,6 +465,7 @@ export default function UpMenu({
                 >
                     <FontAwesomeIcon icon={faRobot} />
                 </button>
+                <UserMenu />
             </div>
 
             {/* Editable Workflow Name */}

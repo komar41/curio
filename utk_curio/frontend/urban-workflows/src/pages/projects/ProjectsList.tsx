@@ -3,6 +3,7 @@ import CSS from "csstype";
 import { useNavigate } from "react-router-dom";
 import { useUserContext } from "../../providers/UserProvider";
 import { projectsApi, ProjectSummary } from "../../api/projectsApi";
+import logo from "assets/curio-2.png";
 
 type ViewMode = "grid" | "list";
 type FilterTab = "all" | "recent" | "archived";
@@ -101,18 +102,7 @@ const ProjectsList: React.FC = () => {
     <div style={pageStyle}>
       {/* Top Nav Bar */}
       <header style={topBarStyle}>
-        <div style={topBarLeftStyle}>
-          <span style={logoStyle}>Curio</span>
-        </div>
-        <div style={topBarCenterStyle}>
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={searchInputStyle}
-          />
-        </div>
+        <img src={logo} alt="Curio" style={logoImgStyle} />
         <div style={topBarRightStyle}>
           <span style={userNameStyle}>{user?.name || "User"}</span>
           <div style={avatarStyle}>{initials}</div>
@@ -134,12 +124,21 @@ const ProjectsList: React.FC = () => {
       <main style={mainStyle}>
         <div style={pageHeaderStyle}>
           <h1 style={pageTitleStyle}>Projects</h1>
-          <button
-            style={newWorkflowBtnStyle}
-            onClick={() => navigate("/dataflow/new")}
-          >
-            + New Dataflow
-          </button>
+          <div style={headerActionsStyle}>
+            <input
+              type="text"
+              placeholder="Search projects..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={searchInputStyle}
+            />
+            <button
+              style={newWorkflowBtnStyle}
+              onClick={() => navigate("/dataflow/new")}
+            >
+              + New Dataflow
+            </button>
+          </div>
         </div>
 
         {/* Filter Tabs + View Toggle */}
@@ -253,38 +252,36 @@ const ctxItemStyle: CSS.Properties = {
 
 const pageStyle: CSS.Properties = {
   minHeight: "100vh",
-  backgroundColor: "#F6F6F8",
+  backgroundColor: "#f0f0f0",
   fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+    "Rubik, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
 const topBarStyle: CSS.Properties = {
-  height: "56px",
-  backgroundColor: "#0F0F11",
+  height: "65px",
+  backgroundColor: "#1E1F23",
   display: "flex",
   alignItems: "center",
-  padding: "0 24px",
+  padding: "10px 20px 10px 10px",
   justifyContent: "space-between",
+  borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
 };
 
-const topBarLeftStyle: CSS.Properties = { display: "flex", alignItems: "center" };
-const logoStyle: CSS.Properties = {
-  color: "#fff",
-  fontSize: "18px",
-  fontWeight: 700,
-  letterSpacing: "0.5px",
+const logoImgStyle: CSS.Properties = {
+  maxHeight: "100%",
+  width: "auto",
+  marginLeft: "15px",
+  marginRight: "15px",
 };
 
-const topBarCenterStyle: CSS.Properties = { flex: 1, margin: "0 32px" };
 const searchInputStyle: CSS.Properties = {
-  width: "100%",
-  maxWidth: "400px",
-  height: "34px",
+  width: "240px",
+  height: "38px",
   padding: "0 12px",
   borderRadius: "6px",
-  border: "1px solid #2A2A2E",
-  backgroundColor: "#1C1C1F",
-  color: "#fff",
+  border: "1px solid #D0D0D5",
+  backgroundColor: "#fff",
+  color: "#1E1F23",
   fontSize: "13px",
   outline: "none",
 };
@@ -292,31 +289,43 @@ const searchInputStyle: CSS.Properties = {
 const topBarRightStyle: CSS.Properties = {
   display: "flex",
   alignItems: "center",
-  gap: "12px",
+  gap: "8px",
 };
 
-const userNameStyle: CSS.Properties = { color: "#fff", fontSize: "13px" };
+const userNameStyle: CSS.Properties = {
+  color: "#fff",
+  fontSize: "12px",
+  fontWeight: 500,
+  maxWidth: "110px",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
 const avatarStyle: CSS.Properties = {
-  width: "32px",
-  height: "32px",
+  width: "28px",
+  height: "28px",
   borderRadius: "50%",
   backgroundColor: "#fff",
   color: "#0F0F11",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "12px",
+  fontSize: "11px",
   fontWeight: 700,
+  border: "1px solid #2A2A2E",
+  flexShrink: 0,
 };
 
 const signoutBtnStyle: CSS.Properties = {
   background: "none",
   border: "1px solid #444",
   borderRadius: "4px",
-  color: "#aaa",
-  fontSize: "12px",
-  padding: "4px 10px",
+  color: "#ddd",
+  fontSize: "11px",
+  fontWeight: 500,
+  padding: "3px 10px",
   cursor: "pointer",
+  lineHeight: 1.3,
 };
 
 const mainStyle: CSS.Properties = {
@@ -332,18 +341,24 @@ const pageHeaderStyle: CSS.Properties = {
   marginBottom: "24px",
 };
 
+const headerActionsStyle: CSS.Properties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+};
+
 const pageTitleStyle: CSS.Properties = {
   fontSize: "24px",
   fontWeight: 600,
-  color: "#0F0F11",
+  color: "#1E1F23",
   margin: 0,
 };
 
 const newWorkflowBtnStyle: CSS.Properties = {
   height: "38px",
   padding: "0 20px",
-  backgroundColor: "#0F0F11",
-  color: "#fff",
+  backgroundColor: "#1E1F23",
+  color: "#fbfcf6",
   border: "none",
   borderRadius: "6px",
   fontSize: "14px",
@@ -370,8 +385,8 @@ const tabBtnStyle: CSS.Properties = {
   color: "#6B6B76",
 };
 const tabActiveStyle: CSS.Properties = {
-  backgroundColor: "#0F0F11",
-  color: "#fff",
+  backgroundColor: "#1E1F23",
+  color: "#fbfcf6",
 };
 
 const viewToggleStyle: CSS.Properties = { display: "flex", gap: "4px" };
@@ -385,9 +400,9 @@ const viewBtnStyle: CSS.Properties = {
   color: "#6B6B76",
 };
 const viewActiveStyle: CSS.Properties = {
-  backgroundColor: "#0F0F11",
-  color: "#fff",
-  borderColor: "#0F0F11",
+  backgroundColor: "#1E1F23",
+  color: "#fbfcf6",
+  borderColor: "#1E1F23",
 };
 
 const gridStyle: CSS.Properties = {
@@ -426,7 +441,7 @@ const cardBodyStyle: CSS.Properties = {
 const cardTitleStyle: CSS.Properties = {
   fontSize: "14px",
   fontWeight: 600,
-  color: "#0F0F11",
+  color: "#1E1F23",
 };
 
 const cardSubStyle: CSS.Properties = {

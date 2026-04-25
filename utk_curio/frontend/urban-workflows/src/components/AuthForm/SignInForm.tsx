@@ -125,10 +125,11 @@ const labelStyle: CSS.Properties = {
 const inputStyle: CSS.Properties = {
   height: "40px",
   padding: "0 12px",
-  border: "1px solid #D0D0D5",
+  border: "1px solid #2A2A2E",
   borderRadius: "6px",
   fontSize: "14px",
   outline: "none",
+  backgroundColor: "#fff",
 };
 
 const errorStyle: CSS.Properties = {
@@ -139,8 +140,8 @@ const errorStyle: CSS.Properties = {
 
 const submitBtnStyle: CSS.Properties = {
   height: "42px",
-  backgroundColor: "#0F0F11",
-  color: "#fff",
+  backgroundColor: "#1E1F23",
+  color: "#fbfcf6",
   border: "none",
   borderRadius: "6px",
   fontSize: "14px",
@@ -156,7 +157,7 @@ const footerStyle: CSS.Properties = {
 };
 
 const linkStyle: CSS.Properties = {
-  color: "#0F0F11",
+  color: "#1E1F23",
   fontWeight: 600,
   textDecoration: "underline",
 };

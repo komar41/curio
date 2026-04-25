@@ -22,7 +22,7 @@ const containerStyle: CSS.Properties = {
 const titleStyle: CSS.Properties = {
   fontSize: "24px",
   fontWeight: 600,
-  color: "#0F0F11",
+  color: "#1E1F23",
   margin: "0 0 8px 0",
 };
 
