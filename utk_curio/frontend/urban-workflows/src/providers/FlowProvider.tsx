@@ -275,6 +275,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     const [outputs, _setOutputs] = useState<IOutput[]>([]);
     const outputsRef = useRef<IOutput[]>([]);
     const playAllStateRef = useRef<PlayAllState | null>(null);
+    const markNodeExecutedRef = useRef<(nodeId: string) => void>(() => {});
+    const markNodeStaleRef = useRef<(nodeId: string) => void>(() => {});
 
     const setOutputs = useCallback((fnOrValue: ((prev: IOutput[]) => IOutput[]) | IOutput[]) => {
         _setOutputs((prev) => {
@@ -475,6 +477,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
             for (const connection of connections) {
                 const resetInput = connection.target;
                 const targetNode = reactFlow.getNode(connection.target) as Node;
+                markNodeStaleRef.current(connection.target);
 
                 // skiping syncronized connections
                 if (
@@ -661,6 +664,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 if (allowConnection) {
+                    markNodeStaleRef.current(connection.target as string);
                     applyOutput(
                         inNodeType as NodeType,
                         connection.target as string,
@@ -743,8 +747,16 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     }, [setNodes]);
 
     function playAllNodes() {
-        const levels = computeTopologicalLevels(reactFlow.getNodes(), reactFlow.getEdges());
+        if (playAllStateRef.current != null) return;
+        const allNodes = reactFlow.getNodes();
+        const allEdges = reactFlow.getEdges();
+        const levels = computeTopologicalLevels(allNodes, allEdges);
         if (!levels.length) return;
+        const visitedIds = new Set(levels.flat());
+        const cyclic = allNodes.filter(n => !visitedIds.has(n.id));
+        if (cyclic.length > 0) {
+            showToast(`${cyclic.length} node(s) skipped due to cycles in the graph`, "warning");
+        }
         playAllStateRef.current = { levels, currentLevel: 0, pending: new Set() };
         triggerLevel(0);
     }
@@ -795,6 +807,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
             return newOpts;
         });
 
+        markNodeExecutedRef.current(newOutput.nodeId);
         signalNodeExecDone(newOutput.nodeId);
     };
 
@@ -940,6 +953,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     // NEW CODE
 
     // Workflow operations extracted into a dedicated hook
+    // NOTE: markNodeExecutedRef/markNodeStaleRef are updated here so functions defined earlier
+    // (applyNewOutput, onEdgesDelete, onConnect) can access them without stale closures.
     const workflowOps = useWorkflowOperations({
         nodes, edges,
         setNodes, setEdges,
@@ -950,6 +965,9 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         onEdgesDelete, onNodesDelete, onNodesChange,
         onConnect, addNode,
     });
+
+    markNodeExecutedRef.current = workflowOps.markNodeExecuted;
+    markNodeStaleRef.current = workflowOps.markNodeStale;
 
     const nodeActionsValue = useMemo<NodeActionsContextProps>(() => ({
         workflowNameRef,

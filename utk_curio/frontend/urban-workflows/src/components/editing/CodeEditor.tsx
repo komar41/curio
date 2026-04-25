@@ -37,7 +37,7 @@ function CodeEditor({
     const [code, setCode] = useState<string>(""); // code with all original markers
     const [execCount, setExecCount] = useState<number>(0);
 
-    const { workflowNameRef } = useFlowContext();
+    const { workflowNameRef, markNodeExecuted, markNodeStale, signalNodeExecDone } = useFlowContext();
     const { nodeExecProv } = useProvenanceContext();
 
     const replacedCodeDirtyBypass = useRef(false);
@@ -46,6 +46,7 @@ function CodeEditor({
     // @ts-ignore
     const handleCodeChange = (value, event) => {
         setCode(value);
+        markNodeStale(data.nodeId);
     };
 
     useEffect(() => {
@@ -68,27 +69,18 @@ function CodeEditor({
     }, [output.code]);
 
     const processExecutionResult = (result: any) => {
-        let outputContent = "";
-        outputContent += "stdout:\n"+result.stdout.slice(0, 100);
-        outputContent += "\nstderr:\n"+result.stderr;
+        const hasOutput = result.output?.path !== "";
 
-        // outputContent += "\nnode output:\n";
-        // if (outputContent.length > 100) {
-        //     outputContent += result.codeOut.slice(0, 100) + "...";
-        // }
-        // else {
-        //     outputContent += result.codeOut;
-        // }
-
-        outputContent += "\nSaved to file: "+result.output.path;
-
-        setOutputCallback({ code: "success", content: outputContent });
-
-        if (result.stderr == "") {
-            // No error in the execution
+        if (hasOutput) {
+            let outputContent = "stdout:\n" + result.stdout.slice(0, 100);
+            if (result.stderr) outputContent += "\nstderr:\n" + result.stderr;
+            outputContent += "\nSaved to file: " + result.output.path;
+            setOutputCallback({ code: "success", content: outputContent });
             data.outputCallback(data.nodeId, result.output);
+            markNodeExecuted(data.nodeId);
         } else {
             setOutputCallback({ code: "error", content: result.stderr });
+            signalNodeExecDone(data.nodeId);
         }
     };
 

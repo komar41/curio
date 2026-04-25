@@ -514,7 +514,7 @@ def process_python_code():
     code = request.json['code']
     nodeType = request.json['nodeType']
     input = {'path': "", 'dataType': ""}
-    if(request.json['input']):
+    if(request.json.get('input')):
         req_input = request.json['input']
         if(req_input['dataType'] == 'outputs' and 'data' in req_input):
             # Multiple outputs from a MergeFlowNode: 'data' is a list of output objects

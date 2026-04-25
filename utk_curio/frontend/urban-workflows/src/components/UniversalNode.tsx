@@ -31,6 +31,7 @@ const UniversalNode = React.memo(function UniversalNode({ data, isConnectable }:
 
   const { signalNodeExecDone } = useFlowContext();
   const lastTriggerExecRef = useRef<number>(data.triggerExec ?? 0);
+  const outputCodeRef = useRef(output?.code);
 
   useEffect(() => {
     const current = data.triggerExec ?? 0;
@@ -45,10 +46,20 @@ const UniversalNode = React.memo(function UniversalNode({ data, isConnectable }:
   }, [data.triggerExec]);
 
   useEffect(() => {
+    outputCodeRef.current = output?.code;
     if (output?.code === "error") {
       signalNodeExecDone(data.nodeId);
     }
   }, [output?.code]);
+
+  // Signal done on unmount if the node was still executing (e.g. deleted while running).
+  useEffect(() => {
+    return () => {
+      if (outputCodeRef.current === "exec") {
+        signalNodeExecDone(data.nodeId);
+      }
+    };
+  }, []);
   const defaultValue =
     lifecycle.defaultValueOverride ??
     (nodeState.templateData.code ? nodeState.templateData.code : data.defaultCode);
