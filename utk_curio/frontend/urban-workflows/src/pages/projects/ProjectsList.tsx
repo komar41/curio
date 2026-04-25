@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import CSS from "csstype";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useUserContext } from "../../providers/UserProvider";
 import { projectsApi, ProjectSummary } from "../../api/projectsApi";
 import logo from "assets/curio-2.png";
@@ -102,11 +102,13 @@ const ProjectsList: React.FC = () => {
     <div style={pageStyle}>
       {/* Top Nav Bar */}
       <header style={topBarStyle}>
-        <img src={logo} alt="Curio" style={logoImgStyle} />
+        <Link to="/projects" style={logoLinkStyle}>
+          <img src={logo} alt="Curio" style={logoImgStyle} />
+        </Link>
         <div style={topBarRightStyle}>
-          <span style={userNameStyle}>{user?.name || "User"}</span>
           <div style={avatarStyle}>{initials}</div>
-          {enableUserAuth && (
+          <div style={userInfoColumnStyle}>
+            <span style={userNameStyle}>{user?.name || "User"}</span>
             <button
               style={signoutBtnStyle}
               onClick={async () => {
@@ -114,9 +116,9 @@ const ProjectsList: React.FC = () => {
                 navigate("/auth/signin");
               }}
             >
-              Sign out
+              Logout
             </button>
-          )}
+          </div>
         </div>
       </header>
 
@@ -267,11 +269,16 @@ const topBarStyle: CSS.Properties = {
   borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
 };
 
+const logoLinkStyle: CSS.Properties = {
+  display: "contents",
+};
+
 const logoImgStyle: CSS.Properties = {
   maxHeight: "100%",
   width: "auto",
   marginLeft: "15px",
   marginRight: "15px",
+  cursor: "pointer",
 };
 
 const searchInputStyle: CSS.Properties = {
@@ -290,6 +297,12 @@ const topBarRightStyle: CSS.Properties = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
+};
+
+const userInfoColumnStyle: CSS.Properties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
 };
 
 const userNameStyle: CSS.Properties = {

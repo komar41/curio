@@ -95,9 +95,9 @@ const guestBtnStyle: CSS.Properties = {
   padding: "10px",
   border: "1px solid #E0E0E0",
   borderRadius: "6px",
-  backgroundColor: "#FAFAFA",
+  backgroundColor: "#fff",
   fontSize: "14px",
   fontWeight: 500,
   cursor: "pointer",
-  color: "#6B6B76",
+  color: "#0F0F11",
 };

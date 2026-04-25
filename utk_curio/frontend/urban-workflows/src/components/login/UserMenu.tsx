@@ -37,9 +37,6 @@ export const UserMenu = () => {
 
   return (
     <div style={containerStyle} className="nowheel nodrag" data-testid="user-menu">
-      <span style={nameStyle} title={displayName}>
-        {displayName}
-      </span>
       <div style={avatarStyle} aria-label="user avatar">
         {user.profile_image ? (
           <img
@@ -51,16 +48,19 @@ export const UserMenu = () => {
           <span style={avatarInitialsStyle}>{initials}</span>
         )}
       </div>
-      {enableUserAuth && (
+      <div style={infoColumnStyle}>
+        <span style={nameStyle} title={displayName}>
+          {displayName}
+        </span>
         <button
           type="button"
           style={signoutBtnStyle}
           onClick={handleSignOut}
           data-testid="signout-button"
         >
-          Sign out
+          Logout
         </button>
-      )}
+      </div>
     </div>
   );
 };
@@ -71,6 +71,12 @@ const containerStyle: CSS.Properties = {
   alignItems: "center",
   gap: "8px",
   fontFamily: "Rubik, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+};
+
+const infoColumnStyle: CSS.Properties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
 };
 
 const nameStyle: CSS.Properties = {

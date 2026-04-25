@@ -30,7 +30,7 @@ import logo from "assets/curio-2.png";
 import { UserMenu } from "components/login/UserMenu";
 import introJs from "intro.js";
 import "intro.js/introjs.css";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useUserContext } from "../../../providers/UserProvider";
 
 export default function UpMenu({
@@ -303,7 +303,9 @@ export default function UpMenu({
                 className={clsx(styles.menuBar, "nowheel", "nodrag")}
                 ref={menuBarRef}
             >
-                <img className={styles.logo} src={logo} alt="Curio logo" />
+                <Link to="/projects" style={{ display: "contents" }}>
+                    <img className={styles.logo} src={logo} alt="Curio logo" />
+                </Link>
 
                 {/* File */}
                 <div className={styles.dropdownWrapper}>

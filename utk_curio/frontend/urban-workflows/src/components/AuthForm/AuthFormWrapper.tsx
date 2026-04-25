@@ -10,12 +10,19 @@ export const AuthFormWrapper: React.FC<Props> = ({ children }) => {
   return (
     <div style={outerStyle}>
       <div style={leftPanelStyle}>
-        <img
-          src={curioLogoWhite}
-          alt="Curio"
-          style={logoStyle}
-        />
-        <p style={taglineStyle}>Visual dataflows for urban data</p>
+        <a href="https://urbantk.org/curio" target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center" }}>
+          <img
+            src={curioLogoWhite}
+            alt="Curio"
+            style={logoStyle}
+          />
+        </a>
+        <div style={taglineGroupStyle}>
+          <p style={taglineStyle}>Visual dataflows for urban data</p>
+          <a href="https://urbantk.org/curio" target="_blank" rel="noreferrer" style={urlStyle}>
+            urbantk.org/curio
+          </a>
+        </div>
       </div>
       <div style={rightPanelStyle}>{children}</div>
     </div>
@@ -46,6 +53,13 @@ const logoStyle: CSS.Properties = {
   height: "auto",
 };
 
+const taglineGroupStyle: CSS.Properties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "8px",
+};
+
 const taglineStyle: CSS.Properties = {
   color: "#D8D8D8",
   fontSize: "17px",
@@ -53,6 +67,13 @@ const taglineStyle: CSS.Properties = {
   letterSpacing: "1px",
   margin: 0,
   textAlign: "center",
+};
+
+const urlStyle: CSS.Properties = {
+  color: "#888",
+  fontSize: "13px",
+  textDecoration: "none",
+  letterSpacing: "0.5px",
 };
 
 const rightPanelStyle: CSS.Properties = {
