@@ -51,6 +51,12 @@ export interface IPropagation {
 
 // applyNewOutputs = useCallback((newOutNodeId: string, newOutput: string)
 
+interface PlayAllState {
+    levels: string[][];
+    currentLevel: number;
+    pending: Set<string>;
+}
+
 interface FlowContextProps {
     nodes: Node[];
     edges: Edge[];
@@ -114,6 +120,8 @@ interface FlowContextProps {
     markDirty: () => void;
     markNodeExecuted: (nodeId: string) => void;
     markNodeStale: (nodeId: string) => void;
+    playAllNodes: () => void;
+    signalNodeExecDone: (nodeId: string) => void;
 }
 
 // Stable context for NodeContainer — only updates when goal/minimized change, NOT on node drag
@@ -212,7 +220,53 @@ export const FlowContext = createContext<FlowContextProps>({
     markDirty: () => {},
     markNodeExecuted: () => {},
     markNodeStale: () => {},
+    playAllNodes: () => {},
+    signalNodeExecDone: () => {},
 });
+
+function computeTopologicalLevels(nodes: Node[], edges: Edge[]): string[][] {
+    const directedEdges = edges.filter(
+        e => !(e.sourceHandle === "in/out" && e.targetHandle === "in/out")
+    );
+
+    const inDegree = new Map<string, number>();
+    const successors = new Map<string, string[]>();
+    for (const n of nodes) { inDegree.set(n.id, 0); successors.set(n.id, []); }
+    for (const e of directedEdges) {
+        inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1);
+        successors.get(e.source)!.push(e.target);
+    }
+
+    const roots = nodes.filter(n => inDegree.get(n.id) === 0);
+    const isolated = roots.filter(n => (successors.get(n.id)?.length ?? 0) === 0).map(n => n.id);
+    const sources  = roots.filter(n => (successors.get(n.id)?.length ?? 0) > 0).map(n => n.id);
+
+    if (isolated.length === 0 && sources.length === 0) return [];
+
+    const levels: string[][] = [];
+    if (isolated.length > 0) levels.push(isolated);
+    if (sources.length > 0) levels.push(sources);
+
+    const remaining = new Map(inDegree);
+    const visited = new Set([...isolated, ...sources]);
+    let queue = sources;
+
+    while (queue.length > 0) {
+        const next: string[] = [];
+        for (const id of queue) {
+            for (const succ of successors.get(id) ?? []) {
+                remaining.set(succ, (remaining.get(succ) ?? 0) - 1);
+                if (remaining.get(succ) === 0 && !visited.has(succ)) {
+                    next.push(succ);
+                    visited.add(succ);
+                }
+            }
+        }
+        if (next.length > 0) levels.push(next);
+        queue = next;
+    }
+    return levels;
+}
 
 const FlowProvider = ({ children }: { children: ReactNode }) => {
     const { showToast } = useToastContext();
@@ -220,6 +274,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [outputs, _setOutputs] = useState<IOutput[]>([]);
     const outputsRef = useRef<IOutput[]>([]);
+    const playAllStateRef = useRef<PlayAllState | null>(null);
+
     const setOutputs = useCallback((fnOrValue: ((prev: IOutput[]) => IOutput[]) | IOutput[]) => {
         _setOutputs((prev) => {
             const next = typeof fnOrValue === "function" ? fnOrValue(prev) : fnOrValue;
@@ -659,6 +715,40 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         [reactFlow.getNodes, reactFlow.getEdges]
     );
 
+    function triggerLevel(levelIndex: number) {
+        const state = playAllStateRef.current;
+        if (!state) return;
+        const levelNodeIds = state.levels[levelIndex];
+        if (!levelNodeIds?.length) { playAllStateRef.current = null; return; }
+        state.pending = new Set(levelNodeIds);
+        state.currentLevel = levelIndex;
+        setNodes((nds: Node[]) =>
+            nds.map((node: Node) =>
+                levelNodeIds.includes(node.id)
+                    ? { ...node, data: { ...node.data, triggerExec: (node.data.triggerExec ?? 0) + 1 } }
+                    : node
+            )
+        );
+    }
+
+    const signalNodeExecDone = useCallback((nodeId: string) => {
+        const state = playAllStateRef.current;
+        if (!state) return;
+        state.pending.delete(nodeId);
+        if (state.pending.size === 0) {
+            const next = state.currentLevel + 1;
+            if (next < state.levels.length) triggerLevel(next);
+            else playAllStateRef.current = null;
+        }
+    }, [setNodes]);
+
+    function playAllNodes() {
+        const levels = computeTopologicalLevels(reactFlow.getNodes(), reactFlow.getEdges());
+        if (!levels.length) return;
+        playAllStateRef.current = { levels, currentLevel: 0, pending: new Set() };
+        triggerLevel(0);
+    }
+
     // a box generated a new output. Propagate it to directly connected boxes
     const applyNewOutput = (newOutput: IOutput) => {
         const currentEdges = reactFlow.getEdges();
@@ -704,6 +794,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
             if (!added) newOpts.push({ ...newOutput });
             return newOpts;
         });
+
+        signalNodeExecDone(newOutput.nodeId);
     };
 
     // responsible for flow of already connected nodes
@@ -910,6 +1002,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 updatePositionWorkflow,
                 updatePositionDashboard,
                 applyNewOutput,
+                playAllNodes,
+                signalNodeExecDone,
 
                 // NEW CODE
                 dashboardPins,

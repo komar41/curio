@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import CSS from "csstype";
 import { Handle, Edge, useEdges } from 'reactflow';
 import { NodeContainer } from './styles';
@@ -10,6 +10,7 @@ import { InputIcon } from './edges/InputIcon';
 import { getNodeDescriptor } from '../registry/nodeRegistry';
 import { useNodeState } from '../hook/useNodeState';
 import { HandleDef, TIconCardinality } from '../registry/types';
+import { useFlowContext } from '../providers/FlowProvider';
 import './Node.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -27,6 +28,27 @@ const UniversalNode = React.memo(function UniversalNode({ data, isConnectable }:
   const output = lifecycle.outputOverride ?? nodeState.output
   const showLoading = lifecycle.showLoading ?? false;
   const disablePlay = lifecycle.disablePlay ?? adapter.container.disablePlay ?? false;
+
+  const { signalNodeExecDone } = useFlowContext();
+  const lastTriggerExecRef = useRef<number>(data.triggerExec ?? 0);
+
+  useEffect(() => {
+    const current = data.triggerExec ?? 0;
+    if (current <= lastTriggerExecRef.current) return;
+    lastTriggerExecRef.current = current;
+    if (disablePlay || !sendCode) {
+      signalNodeExecDone(data.nodeId);
+      return;
+    }
+    setOutputCallback({ code: "exec", content: "" });
+    sendCode(nodeState.code);
+  }, [data.triggerExec]);
+
+  useEffect(() => {
+    if (output?.code === "error") {
+      signalNodeExecDone(data.nodeId);
+    }
+  }, [output?.code]);
   const defaultValue =
     lifecycle.defaultValueOverride ??
     (nodeState.templateData.code ? nodeState.templateData.code : data.defaultCode);

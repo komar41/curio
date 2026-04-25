@@ -43,6 +43,7 @@ export interface INodeData {
   nodeType: string;
   customTemplate?: boolean;
   interactions?: IInteraction[];
+  triggerExec?: number;
 }
 
 /**
