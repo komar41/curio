@@ -86,12 +86,16 @@ const nodeTypes = { execNode: ExecNodeCard };
 const edgeTypes = { provenanceEdge: ProvenanceEdge };
 
 function NodeProvenanceInner({ data, nodeType, setCode, active = false }: NodeProvenanceProps) {
-    const { provenanceGraphNodes, setSelectedExec } = useProvenanceContext();
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const { provenanceGraphNodes, setSelectedExec, selectedParentExecRef } = useProvenanceContext();
+    const [selectedId, setSelectedId] = useState<number | null>(
+        () => selectedParentExecRef.current[data.nodeId] ?? null
+    );
     const { fitView } = useReactFlow();
 
     useEffect(() => {
         if (!active) return;
+        const currentId = selectedParentExecRef.current[data.nodeId];
+        if (currentId != null) setSelectedId(currentId);
         const id = setTimeout(() => fitView({ padding: 0.2 }), 300);
         return () => clearTimeout(id);
     }, [active]);

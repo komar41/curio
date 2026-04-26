@@ -69,7 +69,7 @@ export function useCode(): IUseCode {
     }, [setInteractions]);
 
     // suggestionType: "workflow" | "connection" | "none"
-    const loadTrill = (trill: any, suggestionType?: string) => {
+    const loadTrill = (trill: any, suggestionType?: string, fromProvenance?: boolean) => {
 
         let nodes = [];
         let edges = [];
@@ -143,7 +143,7 @@ export function useCode(): IUseCode {
             let targetHandle = "in";
 
             for(let i = 0; i < 5; i++){
-                if(edge.id.includes("in_"+i))
+                if(edge.id && edge.id.includes("in_"+i))
                     targetHandle = "in_"+i;
             }
 
@@ -175,19 +175,18 @@ export function useCode(): IUseCode {
             edges.push(add_edge);
         }
 
-        if(suggestionType == undefined)
+        if (fromProvenance) {
+            // Reverting to a historical version: preserve the current provenance graph.
+            // latestTrill was already set to the target version by switchProvenanceTrill.
+            const savedProv = TrillGenerator.getSerializableDataflowProvenance();
+            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, false, trill.dataflow.packages || []);
+            TrillGenerator.loadDataflowProvenance(savedProv);
+        } else if(suggestionType == undefined) {
             loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, true, false, trill.dataflow.packages || []);
-        else if(suggestionType == "workflow")
-            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true); // if loading as suggestion deactivate provenance and merge
-        else
+            if (trill.nodeProvenance) loadNodeProvenance(trill.nodeProvenance);
+            if (trill.dataflowProvenance) TrillGenerator.loadDataflowProvenance(trill.dataflowProvenance);
+        } else {
             loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true);
-
-        if (trill.nodeProvenance) {
-            loadNodeProvenance(trill.nodeProvenance);
-        }
-
-        if (trill.dataflowProvenance) {
-            TrillGenerator.loadDataflowProvenance(trill.dataflowProvenance);
         }
 
     }

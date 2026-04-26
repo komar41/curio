@@ -214,7 +214,7 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
                 }
             } else {
                 for (const edge of loaded_edges) {
-                    onConnect(edge, prevNodes, undefined, workflowName, provenance);
+                    onConnect(edge, prevNodes, [], workflowName, provenance);
                 }
             }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState, useEffect } from "react";
 import ReactFlow, {
     ReactFlowProvider,
     Controls,
@@ -15,6 +15,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { TrillGenerator } from "../../../TrillGenerator";
 import { useCode } from "../../../hook/useCode";
+import DataflowThumbnail from "../../DataflowThumbnail";
 import { getLayoutedElements } from "../../../utils/provenanceLayout";
 import styles from "./TrillProvenanceWindow.module.css";
 
@@ -42,24 +43,43 @@ function ProvenanceEdge({ id, source, target, style }: EdgeProps) {
 }
 
 function TrillVersionCard({ data }: NodeProps) {
-    const { label } = data as { label: string };
+    const { label, isSelected, preview, timestamp } = data as {
+        label: string;
+        isSelected: boolean;
+        preview?: { nodes: any[]; edges: any[] } | null;
+        timestamp?: number;
+    };
     return (
         <div style={{ position: "relative" }}>
             <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
             <div
                 style={{
-                    padding: "8px 14px",
-                    background: "#fff",
-                    border: "1.5px solid #bbb",
+                    width: 160,
+                    border: isSelected ? "2px solid #0d47a1" : "1.5px solid #bbb",
                     borderRadius: 6,
-                    fontSize: 12,
-                    minWidth: 160,
-                    textAlign: "center",
+                    overflow: "hidden",
                     cursor: "pointer",
                     userSelect: "none",
+                    background: isSelected ? "#1a73e8" : "#fff",
                 }}
             >
-                {label}
+                <div style={{ width: "100%", height: 90 }}>
+                    <DataflowThumbnail preview={preview ?? null} accentColor="" bgColor="#e8e8e8" />
+                </div>
+                <div
+                    style={{
+                        padding: "4px 8px",
+                        fontSize: 10,
+                        color: isSelected ? "#fff" : "#555",
+                        textAlign: "center",
+                        borderTop: isSelected ? "1px solid #0d47a1" : "1px solid #e0e0e0",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                    }}
+                >
+                    {timestamp ? new Date(timestamp).toLocaleString() : label}
+                </div>
             </div>
             <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
         </div>
@@ -71,6 +91,13 @@ const edgeTypes = { provenanceEdge: ProvenanceEdge };
 
 function TrillProvenanceGraph({ open }: { open: boolean }) {
     const { loadTrill } = useCode();
+    const [selectedId, setSelectedId] = useState<string | null>(
+        () => TrillGenerator.latestTrill || null
+    );
+
+    useEffect(() => {
+        if (open) setSelectedId(TrillGenerator.latestTrill || null);
+    }, [open]);
 
     const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
         const prov = TrillGenerator.provenanceJSON;
@@ -82,7 +109,12 @@ function TrillProvenanceGraph({ open }: { open: boolean }) {
             id: n.id,
             type: "trillNode",
             position: { x: 0, y: 0 },
-            data: { label: n.label || n.id },
+            data: {
+                label: n.label || n.id,
+                isSelected: n.id === selectedId,
+                preview: n.preview ?? null,
+                timestamp: n.timestamp,
+            },
         }));
 
         const rfEdges: Edge[] = prov.edges.map((e: any) => ({
@@ -94,11 +126,12 @@ function TrillProvenanceGraph({ open }: { open: boolean }) {
             style: EDGE_STYLE,
         }));
 
-        return getLayoutedElements(rfNodes, rfEdges, 200, 60, "TB");
-    }, [open]);
+        return getLayoutedElements(rfNodes, rfEdges, 160, 120, "TB");
+    }, [open, selectedId]);
 
     const onNodeClick = useCallback(
         (_: any, node: Node) => {
+            setSelectedId(node.id);
             TrillGenerator.switchProvenanceTrill(node.id, loadTrill);
         },
         [loadTrill]

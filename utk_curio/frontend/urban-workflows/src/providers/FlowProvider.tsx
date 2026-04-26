@@ -685,6 +685,13 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                             markerEnd: { type: MarkerType.ArrowClosed },
                         };
 
+                        // Ensure an id exists before storing in provenance — user-dragged
+                        // connections arrive as Connection (no id); addEdge assigns one later
+                        // but addNewVersionProvenance is called before that.
+                        if (!customConnection.id) {
+                            customConnection.id = `reactflow__edge-${connection.source}${connection.sourceHandle || ''}-${connection.target}${connection.targetHandle || ''}`;
+                        }
+
                         if (customConnection.data == undefined)
                             customConnection.data = {};
 
@@ -699,11 +706,13 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                         } else {
                             customConnection.type = EdgeType.UNIDIRECTIONAL_EDGE;
 
-                            TrillGenerator.addNewVersionProvenance(
+                            if (provenance !== false) {
+                                TrillGenerator.addNewVersionProvenance(
                                     reactFlow.getNodes(),
                                     [...reactFlow.getEdges(), customConnection],
                                     workflowNameRef.current, "", "Connection added"
                                 );
+                            }
                         }
 
                         return addEdge(customConnection, eds);

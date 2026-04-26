@@ -9,6 +9,7 @@ import React, { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useFlowContext, IOutput } from "../providers/FlowProvider";
 import { useCode } from "../hook/useCode";
+import { TrillGenerator } from "../TrillGenerator";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -35,7 +36,11 @@ export const ProjectLoader: React.FC<{ children: React.ReactNode }> = ({ childre
   const { loadTrill } = useCode();
 
   useEffect(() => {
-    if (!id || id === "new" || !UUID_RE.test(id)) return;
+    if (id === "new") {
+      TrillGenerator.reset();
+      return;
+    }
+    if (!id || !UUID_RE.test(id)) return;
     if (loaded.current === id) return;
     if (projectId === id) return;
 

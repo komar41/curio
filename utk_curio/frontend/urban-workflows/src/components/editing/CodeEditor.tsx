@@ -86,27 +86,26 @@ function CodeEditor({
 
     // marks were resolved and new code is available
     useEffect(() => {
-        if (
-            replacedCode != "" &&
-            replacedCodeDirtyBypass.current &&
-            output.code == "exec"
-        ) {
-            // the code was executing and not only resolving widgets
-            // console.log(data);
-            data.pythonInterpreter.interpretCode(
-                code,
-                replacedCode,
-                data.input,
-                data.inputTypes,
-                processExecutionResult,
-                nodeType,
-                data.nodeId,
-                workflowNameRef.current,
-                nodeExecProv
-            );
+        if (!replacedCodeDirtyBypass.current) {
+            replacedCodeDirtyBypass.current = true;
+            return;
         }
-
-        replacedCodeDirtyBypass.current = true;
+        if (output.code !== "exec") return;
+        if (replacedCode === "") {
+            setOutputCallback({ code: "error", content: "No code to execute" });
+            return;
+        }
+        data.pythonInterpreter.interpretCode(
+            code,
+            replacedCode,
+            data.input,
+            data.inputTypes,
+            processExecutionResult,
+            nodeType,
+            data.nodeId,
+            workflowNameRef.current,
+            nodeExecProv
+        );
     }, [replacedCodeDirty]);
 
     useEffect(() => {

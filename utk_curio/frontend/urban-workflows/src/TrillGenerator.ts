@@ -17,6 +17,22 @@ export class TrillGenerator {
         this.list_of_trills = {};
     }
 
+    static _extractGraphPreview(trill: any): { nodes: any[]; edges: any[] } {
+        const nodes = (trill.dataflow?.nodes || []).map((n: any) => ({
+            id: n.id,
+            type: n.type,
+            x: n.x ?? 0,
+            y: n.y ?? 0,
+            w: n.width ?? null,
+            h: n.height ?? null,
+        }));
+        const edges = (trill.dataflow?.edges || []).map((e: any) => ({
+            source: e.source,
+            target: e.target,
+        }));
+        return { nodes, edges };
+    }
+
     static intializeProvenance(trill_spec: any){
         // TODO: look for a provenance JSON for the workflow. If it does not exist initialize it. If it exists load the meta and trill versions to memory (ideally they should be on the database)
         // TODO: for now assuming that the user is never loading a trill or provenanceJSON.
@@ -28,7 +44,8 @@ export class TrillGenerator {
         this.provenanceJSON.nodes.push({
             id: trill_spec.dataflow.name+"_"+trill_spec.dataflow.timestamp,
             label: trill_spec.dataflow.name+" ("+trill_spec.dataflow.timestamp+")",
-            timestamp: trill_spec.dataflow.timestamp
+            timestamp: trill_spec.dataflow.timestamp,
+            preview: this._extractGraphPreview(trill_spec)
         });
     }
 
@@ -45,8 +62,9 @@ export class TrillGenerator {
         this.provenanceJSON.nodes.push({
             id: new_trill.dataflow.name+"_"+new_trill.dataflow.timestamp,
             label: new_trill.dataflow.name+" ("+new_trill.dataflow.timestamp+")",
-            timestamp: new_trill.dataflow.timestamp
-        });        
+            timestamp: new_trill.dataflow.timestamp,
+            preview: this._extractGraphPreview(new_trill)
+        });
 
         this.list_of_trills[new_trill.dataflow.name+"_"+new_trill.dataflow.timestamp] = new_trill;
 
@@ -73,7 +91,7 @@ export class TrillGenerator {
                 throw new Error("Non existant trill: "+name);
 
             this.latestTrill = name;
-            loadTrillFunction(this.list_of_trills[name]);
+            loadTrillFunction(this.list_of_trills[name], undefined, true);
 
         }catch(error){
             console.error("Error switching provenance:", error);
