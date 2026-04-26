@@ -7,7 +7,7 @@ import sqlite3
 from utk_curio.backend.extensions import db
 from utk_curio.backend.app.users.models import User, UserSession
 from utk_curio.backend.app.services.google_oauth import GoogleOAuth
-from utk_curio.backend.app.users.dependencies import require_auth
+from utk_curio.backend.app.users.dependencies import require_auth, get_current_token
 from utk_curio.backend.app.common.safe_paths import (
     PathTraversalError,
     safe_join,
@@ -193,6 +193,20 @@ def add_cors_headers(response):
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
     return response
 
+def _assert_workflow_owner(cursor, workflow_name: str, user_id: int) -> None:
+    """Abort 403 if the latest workflow version is owned by someone else."""
+    cursor.execute(
+        "SELECT user_id FROM workflow WHERE workflow_name = ? ORDER BY workflow_id DESC LIMIT 1",
+        (workflow_name,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return  # workflow not yet created; creation is allowed
+    owner = row[0] if isinstance(row, (tuple, list)) else row["user_id"]
+    if owner is not None and owner != user_id:
+        abort(403)
+
+
 @bp.route('/')
 def root():
     abort(403)
@@ -229,6 +243,7 @@ def sharedDataPath():
     return os.environ["CURIO_SHARED_DATA"]
 
 @bp.route('/upload', methods=['POST'])
+@require_auth
 def upload_file():
 
     if 'file' not in request.files:
@@ -274,6 +289,7 @@ def transform_to_vega(data):
 
 #DuckDB get file
 @bp.route('/get', methods=['GET'])
+@require_auth
 def get_file():
     file_name = request.args.get('fileName')
     vega = request.args.get('vega', 'false').lower() == 'true'
@@ -281,11 +297,12 @@ def get_file():
     if not file_name:
         return 'No artifact id specified', 400
 
+    session_id = get_current_token()
     try:
         t0 = time.perf_counter()
         resp = _sandbox_session.get(
             api_address + ":" + str(api_port) + "/get",
-            params={"fileName": file_name},
+            params={"fileName": file_name, "sessionId": session_id},
             timeout=60,
         )
         resp.raise_for_status()
@@ -341,6 +358,7 @@ def get_file():
 
 #DuckDB get file preview
 @bp.route('/get-preview', methods=['GET'])
+@require_auth
 def get_file_preview():
     """
     Get first N rows + metadata for DataPool display optimization.
@@ -353,12 +371,12 @@ def get_file_preview():
         return 'No artifact id specified', 400
 
     max_rows = 100
-
+    session_id = get_current_token()
     try:
         t0 = time.perf_counter()
         resp = _sandbox_session.get(
             api_address + ":" + str(api_port) + "/get",
-            params={"fileName": file_name, "maxRows": max_rows},
+            params={"fileName": file_name, "maxRows": max_rows, "sessionId": session_id},
             timeout=60,
         )
         resp.raise_for_status()
@@ -504,6 +522,7 @@ def create_preview_data(data, max_rows=100):
     return data
 
 @bp.route('/processPythonCode', methods=['POST'])
+@require_auth
 def process_python_code():
     import time as _time
     t0 = _time.perf_counter()
@@ -523,13 +542,15 @@ def process_python_code():
             input['path'] = req_input['path']
             input['dataType'] = req_input['dataType'] if req_input['dataType'] != 'outputs' else 'file'
 
+    session_id = get_current_token()
     t1 = _time.perf_counter()
     response = _sandbox_session.post(api_address+":"+str(api_port)+"/exec",
                             data=json.dumps({
                                 "code": code,
                                 "file_path": input['path'],
                                 "nodeType": nodeType,
-                                "dataType": input['dataType']
+                                "dataType": input['dataType'],
+                                "session_id": session_id,
                             }),
                             headers={"Content-Type": "application/json"},
                             timeout=120)
@@ -566,6 +587,7 @@ def process_python_code():
 
 
 @bp.route('/installPackages', methods=['POST'])
+@require_auth
 def install_packages():
     packages = request.json.get('packages', [])
     try:
@@ -580,6 +602,7 @@ def install_packages():
         pass
 
 @bp.route('/toLayers', methods=['POST'])
+@require_auth
 def toLayers():
 
     if(request.json['geojsons'] == None):
@@ -672,6 +695,7 @@ def save_user_type_legacy():
     return redirect('/api/auth/me', code=308)
 
 @bp.route('/saveUserProv', methods=['POST'])
+@require_auth
 def save_user_prov(): # only save if user with that name does not exist on the database
 
     # conn = sqlite3.connect('backend/provenance.db')
@@ -716,6 +740,7 @@ def _ensure_wfexec_project_id_column(conn):
         conn.commit()
 
 @bp.route('/saveWorkflowProv', methods=['POST'])
+@require_auth
 def save_workflow_prov():
 
     db_path = get_db_path()
@@ -724,10 +749,7 @@ def save_workflow_prov():
     cursor = conn.cursor()
 
     workflow_name = request.json.get('workflow')
-
-    from utk_curio.backend.app.users.dependencies import get_current_user
-    current_user = get_current_user()
-    user_id = current_user.id if current_user else None
+    user_id = g.user.id
 
     cursor.execute('''INSERT INTO version (version_number)
                     VALUES (?)''', ('1.0',))
@@ -797,6 +819,7 @@ def list_workflows():
     return jsonify(workflows), 200
 
 @bp.route('/newNodeProv', methods=['POST'])
+@require_auth
 def new_node_prov():
     data = request.json.get('data')
 
@@ -805,6 +828,7 @@ def new_node_prov():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
+    _assert_workflow_owner(cursor, data['workflow_name'], g.user.id)
     old_workflow_id, workflow_id = create_new_workflow_version(conn, data['workflow_name'])
 
     # // create relation for new activity (output relation)
@@ -899,6 +923,7 @@ def new_node_prov():
     return "",200
 
 @bp.route('/deleteNodeProv', methods=['POST'])
+@require_auth
 def delete_node_prov():
     data = request.json.get('data')
 
@@ -907,6 +932,7 @@ def delete_node_prov():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
+    _assert_workflow_owner(cursor, data['workflow_name'], g.user.id)
     old_workflow_id, workflow_id = create_new_workflow_version(conn, data['workflow_name'])
 
     # // duplicate all activities (but the excluded node) that point to the old workflow and point to the new one
@@ -978,6 +1004,7 @@ def delete_node_prov():
     return "",200
 
 @bp.route('/newConnectionProv', methods=['POST'])
+@require_auth
 def new_connection_prov():
     """
     Creates a new version of a workflow by adding a new connection and updating input/output relations_id.
@@ -993,6 +1020,7 @@ def new_connection_prov():
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
+        _assert_workflow_owner(cursor, data['workflow_name'], g.user.id)
         old_workflow_id, new_workflow_id = create_new_workflow_version(conn, data['workflow_name'])
 
         # 4. Duplicate activities from the old workflow to the new one
@@ -1051,6 +1079,7 @@ def new_connection_prov():
             conn.close()
 
 @bp.route('/deleteConnectionProv', methods=['POST'])
+@require_auth
 def delete_connection_prov():
     data = request.json.get('data')
 
@@ -1059,6 +1088,7 @@ def delete_connection_prov():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
+    _assert_workflow_owner(cursor, data['workflow_name'], g.user.id)
     old_workflow_id, workflow_id = create_new_workflow_version(conn, data['workflow_name'])
 
     # // duplicate all activities that point to the old workflow and point to the new one (duplicate relations tied to activities)
@@ -1140,6 +1170,7 @@ def check_db():
     return "OK",200
 
 @bp.route('/nodeExecProv', methods=['POST'])
+@require_auth
 def node_exec_prov():
     data = request.json.get('data')
     project_id = data.get('project_id') if data else None
@@ -1149,6 +1180,8 @@ def node_exec_prov():
     conn = sqlite3.connect(db_path)
     _ensure_wfexec_project_id_column(conn)
     cursor = conn.cursor()
+
+    _assert_workflow_owner(cursor, data['workflow_name'], g.user.id)
 
     # new workflow execution
     # replicate all activity execution from old workflow execution (except the one related to the activity I'm currently running) and make them point to the new workflow execution
@@ -1306,6 +1339,7 @@ def node_exec_prov():
     return "",200
 
 @bp.route('/getNodeGraph', methods=['POST'])
+@require_auth
 def get_node_graph():
 
     # db_path = os.path.join(os.getcwd(), ".curio", "provenance.db")
@@ -1314,6 +1348,7 @@ def get_node_graph():
     cursor = conn.cursor()
 
     data = request.json.get('data')
+    _assert_workflow_owner(cursor, data['workflow_name'], g.user.id)
 
     # last workflow created with this name
     cursor.execute("SELECT workflow_id FROM workflow WHERE workflow_id = (SELECT MAX(workflow_id) FROM workflow WHERE workflow_name = ?)", (data['workflow_name'],))
@@ -1395,6 +1430,7 @@ def get_node_graph():
     }),200
 
 @bp.route('/truncateDBProv', methods=['GET'])
+@require_auth
 def truncate_db_prov():
 
     # db_path = os.path.join(os.getcwd(), ".curio", "provenance.db")
@@ -1423,6 +1459,7 @@ def truncate_db_prov():
     return "",200
 
 @bp.route('/insert_attribute_value_change', methods=['POST'])
+@require_auth
 def insert_attribute_value_change():
     data = request.json.get('data')
     activity_name = data.get('activity_name')
@@ -1497,6 +1534,7 @@ def insert_attribute_value_change():
 
 
 @bp.route('/insert_visualization', methods=['POST'])
+@require_auth
 def insert_visualization():
     data = request.json.get('data')
     activity_name = data.get('activity_name')
@@ -1586,6 +1624,7 @@ def insert_visualization():
 
 
 @bp.route('/insert_interaction', methods=['POST'])
+@require_auth
 def insert_interaction():
     data = request.json.get('data')
     activity_name = data.get('activity_name')
@@ -1624,14 +1663,10 @@ def insert_interaction():
 
         # 3. Inserting into the interaction table
 
-        from utk_curio.backend.app.users.dependencies import get_current_user
-        current_user = get_current_user()
-        user_id_val = current_user.id if current_user else None
-
         cursor.execute("""
             INSERT INTO interaction (int_time, user_id, vis_id)
             VALUES (?, ?, ?)
-        """, (data['int_time'], user_id_val, vis_id))
+        """, (data['int_time'], g.user.id, vis_id))
         conn.commit()
 
         return {'message': 'Visualization successfully recorded'}, 201

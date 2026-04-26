@@ -428,7 +428,7 @@ def _make_id():
     return f"{timestamp}_{random_part}"
 
 
-def save_to_duckdb(value, node_id=None):
+def save_to_duckdb(value, node_id=None, session_id=None):
     """
     Save a Python value to the artifacts table.
 
@@ -436,6 +436,8 @@ def save_to_duckdb(value, node_id=None):
         value: the raw Python object (DataFrame, GeoDataFrame, int, str, list, dict, tuple, rasterio dataset, etc.)
                OR a parsed output dict (from parseOutput) for compatibility.
         node_id: the workflow node id that produced this artifact.
+        session_id: Bearer token of the session that produced this artifact.
+                    Used to scope artifact access so concurrent sessions are isolated.
 
     Returns:
         str: the id of the new artifact row.
@@ -457,7 +459,7 @@ def save_to_duckdb(value, node_id=None):
 
         # --- Tuple: split into children + parent pointer row ---
         elif isinstance(value, tuple):
-            child_ids = [save_to_duckdb(child, node_id=node_id) for child in value]
+            child_ids = [save_to_duckdb(child, node_id=node_id, session_id=session_id) for child in value]
             con.execute(
                 "INSERT INTO artifacts (id, node_id, kind, value_json) VALUES (?, ?, ?, ?)",
                 [art_id, node_id, 'outputs', json.dumps(child_ids)]
@@ -505,7 +507,7 @@ def save_to_duckdb(value, node_id=None):
             except TypeError:
                 # fallback: list contains DataFrames/GeoDataFrames/etc.
                 # recursively save each element as its own artifact, store the IDs here
-                child_ids = [save_to_duckdb(child, node_id=node_id) for child in value]
+                child_ids = [save_to_duckdb(child, node_id=node_id, session_id=session_id) for child in value]
                 con.execute(
                     "INSERT INTO artifacts (id, node_id, kind, value_json) VALUES (?, ?, ?, ?)",
                     [art_id, node_id, 'list_of_ids', json.dumps(child_ids)]
@@ -522,7 +524,7 @@ def save_to_duckdb(value, node_id=None):
                 kind_logged = 'dict'
             except TypeError:
                 # fallback: dict values contain DataFrames/GeoDataFrames/etc.
-                child_id_map = {k: save_to_duckdb(v, node_id=node_id) for k, v in value.items()}
+                child_id_map = {k: save_to_duckdb(v, node_id=node_id, session_id=session_id) for k, v in value.items()}
                 con.execute(
                     "INSERT INTO artifacts (id, node_id, kind, value_json) VALUES (?, ?, ?, ?)",
                     [art_id, node_id, 'dict_of_ids', json.dumps(child_id_map)]
@@ -576,6 +578,12 @@ def save_to_duckdb(value, node_id=None):
         else:
             raise TypeError(f"save_to_duckdb: unsupported type {type(value)}")
 
+        if session_id is not None:
+            con.execute(
+                "UPDATE artifacts SET session_id = ? WHERE id = ?",
+                [session_id, art_id]
+            )
+
         elapsed = _time.perf_counter() - t_start
         print(f"[duckdb] save {kind_logged} id={art_id} node={node_id} took={elapsed:.4f}s")
         return art_id
@@ -584,9 +592,12 @@ def save_to_duckdb(value, node_id=None):
         con.close()
 
 
-def load_from_duckdb(art_id):
+def load_from_duckdb(art_id, session_id=None):
     """
     Load an artifact by id.
+
+    If session_id is provided, the artifact must belong to that session (or have
+    no session_id, for backward compatibility with pre-isolation artifacts).
 
     Returns the reconstructed Python value (DataFrame, GeoDataFrame, tuple, int, etc.).
     """
@@ -605,6 +616,16 @@ def load_from_duckdb(art_id):
 
         if row is None:
             raise KeyError(f"No artifact with id {art_id}")
+
+        # Enforce session isolation: reject artifacts owned by a different session.
+        # Artifacts with session_id=NULL are pre-isolation rows; allow them through.
+        if session_id is not None:
+            sid_row = con.execute(
+                "SELECT session_id FROM artifacts WHERE id = ?", [art_id]
+            ).fetchone()
+            stored_sid = sid_row[0] if sid_row else None
+            if stored_sid is not None and stored_sid != session_id:
+                raise KeyError(f"No artifact with id {art_id}")
 
         kind, v_int, v_float, v_str, v_json, blob = row
 
@@ -646,14 +667,14 @@ def load_from_duckdb(art_id):
         elif kind == 'list_of_ids':
             child_ids = json.loads(v_json)
             con.close()                       # close before recursing — one conn per call
-            result = [load_from_duckdb(cid) for cid in child_ids]
+            result = [load_from_duckdb(cid, session_id=session_id) for cid in child_ids]
             elapsed = _time.perf_counter() - t_start
             print(f"[duckdb] load list_of_ids id={art_id} children={len(child_ids)} took={elapsed:.4f}s")
             return result
         elif kind == 'dict_of_ids':
             child_id_map = json.loads(v_json)
             con.close()
-            result = {k: load_from_duckdb(cid) for k, cid in child_id_map.items()}
+            result = {k: load_from_duckdb(cid, session_id=session_id) for k, cid in child_id_map.items()}
             elapsed = _time.perf_counter() - t_start
             print(f"[duckdb] load dict_of_ids id={art_id} children={len(child_id_map)} took={elapsed:.4f}s")
             return result
@@ -661,7 +682,7 @@ def load_from_duckdb(art_id):
             child_ids = json.loads(v_json)
             # Close this connection before recursing (one connection per call)
             con.close()
-            result = tuple(load_from_duckdb(cid) for cid in child_ids)
+            result = tuple(load_from_duckdb(cid, session_id=session_id) for cid in child_ids)
             elapsed = _time.perf_counter() - t_start
             print(f"[duckdb] load outputs id={art_id} children={len(child_ids)} took={elapsed:.4f}s")
             return result

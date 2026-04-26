@@ -1,5 +1,6 @@
 import { NodeType } from "./constants";
 import { formatDate, mapTypes } from "./utils/formatters";
+import { getToken } from "./utils/authApi";
 // import { pythonCode } from "./pythonWrapper";
 
 export class PythonInterpreter {
@@ -40,6 +41,7 @@ export class PythonInterpreter {
 
         console.log("unifiedLines", unifiedLines);
 
+        const _token = getToken();
         fetch(process.env.BACKEND_URL + "/processPythonCode", {
             method: "POST",
             body: JSON.stringify({
@@ -50,6 +52,7 @@ export class PythonInterpreter {
             }),
             headers: {
                 "Content-type": "application/json; charset=UTF-8",
+                ...(_token ? { "Authorization": `Bearer ${_token}` } : {}),
             },
         })
             .then(async (response) => {

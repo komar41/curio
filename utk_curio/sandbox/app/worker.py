@@ -63,9 +63,13 @@ def _worker_init():
     }
 
 
-def execute_code(code, file_path, node_type, data_type, launch_dir=None):
+def execute_code(code, file_path, node_type, data_type, launch_dir=None, session_id=None):
     """
     Execute user code in-process using pre-loaded library globals.
+
+    session_id: Bearer token of the requesting session. Artifacts are stored and
+                loaded scoped to this session so concurrent sessions never share
+                execution state — even if they share the same user account.
 
     Returns {'stdout': [str, ...], 'stderr': str, 'output': {'path': str, 'dataType': str}}
     """
@@ -105,9 +109,9 @@ def execute_code(code, file_path, node_type, data_type, launch_dir=None):
                 input_data = ''
                 if data_type == 'outputs':
                     file_path_list = eval(file_path, {'__builtins__': {}})
-                    input_data = [load_from_duckdb(elem['path']) for elem in file_path_list]
+                    input_data = [load_from_duckdb(elem['path'], session_id=session_id) for elem in file_path_list]
                 elif file_path:
-                    input_data = load_from_duckdb(file_path)
+                    input_data = load_from_duckdb(file_path, session_id=session_id)
                 t_load = time.perf_counter()
 
                 # Validate and prepare input.
@@ -140,8 +144,8 @@ def execute_code(code, file_path, node_type, data_type, launch_dir=None):
                     synthetic_out = {'dataType': out_kind, 'data': None}
                 checkIOType(synthetic_out, node_type, False)
 
-                # Save output to DuckDB.
-                result_path = save_to_duckdb(output, node_id=node_type)
+                # Save output to DuckDB, tagged with the session that produced it.
+                result_path = save_to_duckdb(output, node_id=node_type, session_id=session_id)
                 result = {'path': result_path, 'dataType': out_kind}
                 t_save = time.perf_counter()
 

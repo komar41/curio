@@ -44,8 +44,9 @@ def get_artifact():
     art_id = request.args.get('fileName')
     if not art_id:
         abort(400, "fileName is required")
+    session_id = request.args.get('sessionId') or None
     max_rows_param = request.args.get('maxRows')
-    raw = load_from_duckdb(art_id)
+    raw = load_from_duckdb(art_id, session_id=session_id)
     total_rows = None
     if max_rows_param is not None:
         max_rows = int(max_rows_param)
@@ -164,9 +165,10 @@ def exec():
     file_path  = request.json['file_path']
     node_type  = request.json['nodeType']
     data_type  = request.json['dataType']
+    session_id = request.json.get('session_id') or None
     launch_dir = os.environ.get('CURIO_LAUNCH_CWD', os.getcwd())
 
-    result = execute_code(code, str(file_path), str(node_type), str(data_type), launch_dir)
+    result = execute_code(code, str(file_path), str(node_type), str(data_type), launch_dir, session_id=session_id)
 
     print(f"[sandbox /exec] total={time.perf_counter()-t0:.3f}s  node={node_type}", file=sys.stderr, flush=True)
     return jsonify(result)

@@ -89,6 +89,7 @@ def init_db() -> None:
             id          VARCHAR PRIMARY KEY,
             node_id     VARCHAR,
             kind        VARCHAR NOT NULL,
+            session_id  VARCHAR,
             value_int   BIGINT,
             value_float DOUBLE,
             value_str   VARCHAR,
@@ -96,4 +97,8 @@ def init_db() -> None:
             blob        BLOB
         )
     """)
+    # Migrate existing tables that pre-date the session_id column.
+    existing = {row[0] for row in con.execute("DESCRIBE artifacts").fetchall()}
+    if "session_id" not in existing:
+        con.execute("ALTER TABLE artifacts ADD COLUMN session_id VARCHAR")
     _initialized = True

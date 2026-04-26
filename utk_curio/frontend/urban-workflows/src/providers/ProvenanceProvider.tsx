@@ -1,5 +1,13 @@
 import React, { createContext, useContext, ReactNode, useState } from "react";
 import { NodeType } from "../constants";
+import { getToken } from "../utils/authApi";
+
+function authHeaders(): HeadersInit {
+    const token = getToken();
+    return token
+        ? { "Content-type": "application/json; charset=UTF-8", "Authorization": `Bearer ${token}` }
+        : { "Content-type": "application/json; charset=UTF-8" };
+}
 
 interface ProvenanceContextProps {
     addUser: (user_name: string, user_type: string, user_IP: string) => void;
@@ -64,9 +72,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     user_IP,
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         });
     };
 
@@ -82,9 +88,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     activity_name,
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         });
     };
 
@@ -97,15 +101,14 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     activity_name,
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         });
     };
 
     const addWorkflow = async (workflow_name: string) => {
         await fetch(process.env.BACKEND_URL + "/truncateDBProv", {
             method: "GET",
+            headers: authHeaders(),
         });
 
         await fetch(process.env.BACKEND_URL + "/saveWorkflowProv", {
@@ -113,9 +116,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
             body: JSON.stringify({
                 workflow: workflow_name,
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         });
     };
 
@@ -144,9 +145,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     targetNodeType,
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         });
     };
 
@@ -164,9 +163,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     targetNodeType,
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         });
     };
 
@@ -198,9 +195,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     interaction
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         }).then((value: any) => {
             getNodeGraph(workflow_name, activity_name);
         });
@@ -217,9 +212,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
                     activity_name,
                 },
             }),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8",
-            },
+            headers: authHeaders(),
         })
             .then((response) => response.json())
             .then((json: any) => {
@@ -272,6 +265,7 @@ const ProvenanceProvider = ({ children }: { children: ReactNode }) => {
     const truncateDB = () => {
         fetch(process.env.BACKEND_URL + "/truncateDBProv", {
             method: "GET",
+            headers: authHeaders(),
         });
     };
 

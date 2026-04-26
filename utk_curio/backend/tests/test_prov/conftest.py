@@ -11,6 +11,60 @@ SEED_ATTRIBUTES = [
     (5, "JSON", "Data"),
 ]
 
+_PROV_TEST_TOKEN = "prov-test-token-xyz"
+
+
+@pytest.fixture(scope="session")
+def auth_headers(app):
+    """Create one test user + active session for all prov tests.
+
+    Session-scoped so the SQLAlchemy row survives across the function-scoped
+    ``prov_db`` fixtures without being rolled back.
+    """
+    from utk_curio.backend.app.users.models import User, UserSession
+    from utk_curio.backend.extensions import db
+
+    with app.app_context():
+        u = User(username="prov_test_user", name="Prov Test User")
+        db.session.add(u)
+        db.session.flush()
+        s = UserSession(user_id=u.id, token=_PROV_TEST_TOKEN)
+        db.session.add(s)
+        db.session.commit()
+
+    return {"Authorization": f"Bearer {_PROV_TEST_TOKEN}"}
+
+
+@pytest.fixture
+def client(app, auth_headers):
+    """Flask test client that automatically injects Bearer auth on every request.
+
+    Replaces the root-conftest ``client`` so all prov tests get auth for free
+    — no test file changes needed.
+    """
+    base = app.test_client()
+
+    class _AuthedClient:
+        def _headers(self, kw):
+            h = dict(kw.pop("headers", None) or {})
+            h.update(auth_headers)
+            kw["headers"] = h
+            return kw
+
+        def get(self, *a, **kw):
+            return base.get(*a, **self._headers(kw))
+
+        def post(self, *a, **kw):
+            return base.post(*a, **self._headers(kw))
+
+        def put(self, *a, **kw):
+            return base.put(*a, **self._headers(kw))
+
+        def delete(self, *a, **kw):
+            return base.delete(*a, **self._headers(kw))
+
+    return _AuthedClient()
+
 
 @pytest.fixture
 def prov_db(tmp_path, monkeypatch):
@@ -32,12 +86,6 @@ def prov_db(tmp_path, monkeypatch):
         "utk_curio.backend.app.api.routes.get_db_path", lambda: db_file
     )
     return db_file
-
-
-@pytest.fixture
-def client(app):
-    """Flask test client from the session-scoped app fixture."""
-    return app.test_client()
 
 
 @pytest.fixture

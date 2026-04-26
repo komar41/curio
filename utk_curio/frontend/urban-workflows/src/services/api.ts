@@ -1,12 +1,15 @@
+import { getToken } from "../utils/authApi";
+
 export async function fetchData(fileName: string, vega: boolean = false) {
     try {
         // const url = `${process.env.BACKEND_URL}/get?fileName=${encodeURIComponent(fileName)}${vega ? '&vega=true' : ''}`;
         const url = `${process.env.BACKEND_URL}/get?fileName=${encodeURIComponent(fileName)}`;
         console.log(`Fetching ${url}`);
-        
+        const _token = getToken();
         const response = await fetch(url, {
             headers: {
                 'Content-Type': 'application/json',
+                ...(_token ? { 'Authorization': `Bearer ${_token}` } : {}),
             },
         });
 
@@ -41,10 +44,11 @@ export async function fetchPreviewData(fileName: string) {
         const backendUrl = process.env.BACKEND_URL || 'http://localhost:5002';
         const url = `${backendUrl}/get-preview?fileName=${encodeURIComponent(fileName)}`;
         console.log(`[fetchPreviewData] Fetching preview from ${url}`);
-        
+        const _token = getToken();
         const response = await fetch(url, {
             headers: {
                 'Content-Type': 'application/json',
+                ...(_token ? { 'Authorization': `Bearer ${_token}` } : {}),
             },
         });
 
