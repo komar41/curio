@@ -20,7 +20,7 @@ def health():
 
 if __name__ == '__main__':
     app.run(
-        host=os.getenv('FLASK_BACKEND_HOST', 'localhost'),
+        host=os.getenv('FLASK_BACKEND_HOST', '127.0.0.1'),
         port=int(os.getenv('FLASK_BACKEND_PORT', 5002)),
         threaded=True,
         debug=True,

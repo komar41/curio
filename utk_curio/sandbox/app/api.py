@@ -13,22 +13,13 @@ from pathlib import Path
 
 from shapely import wkt
 
-from utk_curio.sandbox.app.worker import execute_code
+from utk_curio.sandbox.app.worker import _worker_init, execute_code
+from utk_curio.sandbox.util.parsers import load_from_duckdb, parseOutput
 
 _VALID_PACKAGE_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._\-]*(\[[\w,\s]+\])?(===?|~=|!=|>=?|<=?[a-zA-Z0-9._\-*]+)?$')
 
-_pool = None
-
-def _get_pool():
-    global _pool
-    if _pool is None:
-        from concurrent.futures import ProcessPoolExecutor
-        from utk_curio.sandbox.app.worker import _worker_init
-        import atexit
-        n_workers = int(os.environ.get('CURIO_WORKER_POOL_SIZE', '2'))
-        _pool = ProcessPoolExecutor(max_workers=n_workers, initializer=_worker_init)
-        atexit.register(_pool.shutdown, wait=False)
-    return _pool
+# Pre-load heavy libraries once at sandbox startup so every /exec call is fast.
+_worker_init()
 
 DATA_DIR = "./data"
 
@@ -46,6 +37,28 @@ def root():
 @app.route('/live', methods=['GET'])
 def live():
     return 'Sandbox is live.'
+
+@app.route('/get', methods=['GET'])
+def get_artifact():
+    import pandas as _pd
+    art_id = request.args.get('fileName')
+    if not art_id:
+        abort(400, "fileName is required")
+    max_rows_param = request.args.get('maxRows')
+    raw = load_from_duckdb(art_id)
+    total_rows = None
+    if max_rows_param is not None:
+        max_rows = int(max_rows_param)
+        if isinstance(raw, _pd.DataFrame):
+            total_rows = len(raw)
+            raw = raw.head(max_rows)
+    data = parseOutput(raw)
+    data['filename'] = art_id
+    if total_rows is not None:
+        data['preview'] = True
+        data['previewRows'] = min(max_rows, total_rows)
+        data['totalRows'] = total_rows
+    return jsonify(data)
 
 @app.route('/cwd')
 def cwd():
@@ -141,33 +154,21 @@ def install_packages():
 # @cache.cached(make_cache_key=make_key)
 def exec():
     import time
-    import traceback
-    start_time = time.time()
-    app.logger.info('/exec: Request begin')
+    import sys
+    t0 = time.perf_counter()
 
     if request.json.get('code') is None:
         abort(400, "Code was not included in the post request")
 
-    code      = request.json['code']
-    file_path = request.json['file_path']
-    node_type = request.json['nodeType']
-    data_type = request.json['dataType']
+    code       = request.json['code']
+    file_path  = request.json['file_path']
+    node_type  = request.json['nodeType']
+    data_type  = request.json['dataType']
     launch_dir = os.environ.get('CURIO_LAUNCH_CWD', os.getcwd())
-    timeout   = int(os.environ.get('CURIO_EXEC_TIMEOUT', '120'))
 
-    pool = _get_pool()
-    future = pool.submit(execute_code, code, str(file_path), str(node_type), str(data_type), launch_dir)
+    result = execute_code(code, str(file_path), str(node_type), str(data_type), launch_dir)
 
-    try:
-        result = future.result(timeout=timeout)
-    except Exception:
-        result = {
-            'stdout': [],
-            'stderr': traceback.format_exc(),
-            'output': {'path': '', 'dataType': 'str'},
-        }
-
-    app.logger.info(f'/exec: Request end in {(time.time() - start_time):.2f}s')
+    print(f"[sandbox /exec] total={time.perf_counter()-t0:.3f}s  node={node_type}", file=sys.stderr, flush=True)
     return jsonify(result)
 
 @app.route('/toLayers', methods=['POST'])

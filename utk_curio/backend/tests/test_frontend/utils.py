@@ -74,17 +74,20 @@ def get_shared_data_dir() -> str:
 # ---------------------------------------------------------------------------
 
 def load_artifact_as_dict(artifact_id: str) -> dict:
-    """Drop-in replacement for the old ``load_dot_data(path)`` — same shape of
-    return value, just sourced from the ``artifacts`` table instead of a
-    zlib-compressed ``.data`` file.
-    """
-    from utk_curio.sandbox.util.parsers import load_from_duckdb, parseOutput
-    parsed = parseOutput(load_from_duckdb(artifact_id))
-    # load_dot_data read a file that had been json.dumps'd at save time, so
-    # its return was always pure Python types (numpy → list, np.int64 → int).
-    # Preserve that invariant — callers compare dicts with ==, which raises
-    # ValueError on numpy arrays.
-    return json.loads(json.dumps(parsed, default=str))
+    """Fetch a stored artifact from the sandbox and return its parsed representation."""
+    import requests as _req
+    sandbox_host = os.environ.get('FLASK_SANDBOX_HOST', '127.0.0.1')
+    sandbox_port = int(os.environ.get('FLASK_SANDBOX_PORT', '2000'))
+    resp = _req.get(
+        f'http://{sandbox_host}:{sandbox_port}/get',
+        params={'fileName': artifact_id},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    parsed = resp.json()
+    result = json.loads(json.dumps(parsed, default=str))
+    result.pop('filename', None)  # artifact ID varies per execution run
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -516,108 +519,79 @@ def execute_workflow_programmatically(spec, seed: int = 42) -> dict[str, str]:
 """
 
 def execute_workflow_programmatically(spec, seed: int = 42) -> dict[str, str]:
-    """Execute every code node in-process and return *{node_id: duckdb_artifact_id}*.
+    """Execute every code node via the sandbox HTTP API and return {node_id: artifact_id}.
 
-    Mirrors the sandbox ``python_wrapper.txt`` flow — load upstream inputs
-    from DuckDB, call user code, save the raw result back to DuckDB —
-    but runs entirely inside the test process.  The returned mapping is
-    later used by Playwright tests to compare the browser-produced
-    artifact with the programmatically-produced one.
+    Routes all execution through the sandbox's /exec endpoint so the sandbox's
+    persistent DuckDB connection remains the sole writer throughout the test.
+    The returned artifact IDs are used by Playwright tests to compare
+    sandbox-produced outputs with browser-produced ones.
     """
-    _ensure_parsers_env()
+    import requests as _req
 
-    from utk_curio.sandbox.util.parsers import (
-        load_from_duckdb,
-        save_to_duckdb,
-        detect_kind,
-        checkIOType,
-    )
+    sandbox_host = os.environ.get('FLASK_SANDBOX_HOST', '127.0.0.1')
+    sandbox_port = int(os.environ.get('FLASK_SANDBOX_PORT', '2000'))
+    sandbox_url = f'http://{sandbox_host}:{sandbox_port}'
 
-    outputs: dict[str, dict] = {}   # node_id → {"path": <id>, "dataType": ...}
+    outputs: dict[str, dict] = {}   # node_id → {"path": artifact_id, "dataType": ...}
     expected: dict[str, str] = {}   # node_id → duckdb artifact id
 
-    # User code uses relative paths (e.g. "docs/examples/data/…") that are
-    # resolved from the repo root — the same CWD the sandbox uses via
-    # CURIO_LAUNCH_CWD.  Switch CWD for the duration of execution.
-    original_cwd = os.getcwd()
-    os.chdir(REPO_ROOT)
-    try:
-        for node in spec.topo_sorted_nodes():
-            # Non-code nodes: propagate upstream output without execution
-            if node.category != "code":
-                upstreams = spec.upstream_nodes(node.id)
-                if len(upstreams) == 1 and upstreams[0] in outputs:
-                    outputs[node.id] = outputs[upstreams[0]]
-                elif len(upstreams) > 1:
-                    outputs[node.id] = {
-                        "path": [outputs[uid] for uid in upstreams if uid in outputs],
-                        "dataType": "outputs",
-                    }
-                continue
-
-            # --- resolve input (mirrors python_wrapper.txt) ---
+    for node in spec.topo_sorted_nodes():
+        # Non-code nodes: propagate upstream output without execution
+        if node.category != "code":
             upstreams = spec.upstream_nodes(node.id)
-            if not upstreams:
-                # incoming = ""
-                incoming = None
-            elif len(upstreams) == 1:
-                up = outputs[upstreams[0]]
-                if up.get("dataType") == "outputs":
-                    incoming = [load_from_duckdb(elem["path"]) for elem in up["path"]]
-                else:
-                    incoming = load_from_duckdb(up["path"])
-            else:
-                incoming = [load_from_duckdb(outputs[uid]["path"]) for uid in upstreams]
-
-            # Validate input shape via a synthetic dict (same trick as the wrapper)
-            # if incoming != "":
-            if incoming is not None:
-                if isinstance(incoming, list):
-                    synthetic_in = {
-                        "dataType": "outputs",
-                        "data": [{"dataType": detect_kind(v), "data": None} for v in incoming],
-                    }
-                else:
-                    synthetic_in = {"dataType": detect_kind(incoming), "data": None}
-                checkIOType(synthetic_in, node.type)
-
-            # --- exec seeded user code ---
-            resolved = resolve_widget_placeholders(node.content)
-            seeded = seed_node_code(resolved, seed)
-
-            # Provide the same top-level imports as python_wrapper.txt
-            import warnings as _w; _w.filterwarnings("ignore")
-            import rasterio, geopandas, pandas, mmap, hashlib, ast  # noqa: F811
-            ns: dict = {
-                "warnings": _w, "rasterio": rasterio,
-                "gpd": geopandas, "geopandas": geopandas,
-                "pd": pandas, "pandas": pandas,
-                "json": json, "mmap": mmap, "os": os,
-                "time": time, "hashlib": hashlib, "ast": ast,
-            }
-            exec(
-                "def userCode(arg):\n" + textwrap.indent(seeded, "    "),
-                ns,
-            )
-            result = ns["userCode"](incoming)
-
-            # --- validate & persist (same as wrapper) ---
-            out_kind = detect_kind(result)
-            if out_kind == "outputs":
-                synthetic_out = {
+            if len(upstreams) == 1 and upstreams[0] in outputs:
+                outputs[node.id] = outputs[upstreams[0]]
+            elif len(upstreams) > 1:
+                outputs[node.id] = {
+                    "path": [outputs[uid] for uid in upstreams if uid in outputs],
                     "dataType": "outputs",
-                    "data": [{"dataType": detect_kind(v), "data": None} for v in result],
                 }
+            continue
+
+        # Resolve input (mirrors process_python_code in backend routes.py)
+        upstreams = spec.upstream_nodes(node.id)
+        if not upstreams:
+            file_path = ""
+            data_type = ""
+        elif len(upstreams) == 1:
+            up = outputs[upstreams[0]]
+            if up.get("dataType") == "outputs":
+                # Pass as stringified list; worker.py eval()s it back
+                file_path = str(up["path"])
+                data_type = "outputs"
             else:
-                synthetic_out = {"dataType": out_kind, "data": None}
-            checkIOType(synthetic_out, node.type, False)
+                file_path = up["path"]
+                data_type = up["dataType"]
+        else:
+            file_path = str([outputs[uid] for uid in upstreams])
+            data_type = "outputs"
 
-            artifact_id = save_to_duckdb(result, node_id=node.type)
+        # Sandbox /exec expects code already indented as a function body
+        resolved = resolve_widget_placeholders(node.content)
+        seeded = seed_node_code(resolved, seed)
+        indented_code = textwrap.indent(seeded, "    ")
 
-            outputs[node.id] = {"path": artifact_id, "dataType": out_kind}
-            expected[node.id] = artifact_id
-    finally:
-        os.chdir(original_cwd)
+        resp = _req.post(
+            f'{sandbox_url}/exec',
+            json={
+                "code": indented_code,
+                "file_path": file_path,
+                "nodeType": node.type,
+                "dataType": data_type,
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+
+        if result.get('stderr'):
+            raise RuntimeError(
+                f"Node {node.id} ({node.type}) failed:\n{result['stderr']}"
+            )
+
+        out = result['output']
+        outputs[node.id] = {"path": out['path'], "dataType": out['dataType']}
+        expected[node.id] = out['path']
 
     return expected
 

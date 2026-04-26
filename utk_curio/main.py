@@ -526,13 +526,13 @@ def main():
         help="Script to manage Curio's servers (all, frontend, backend, sandbox)"
     )
     parser.add_argument(
-        "--backend-host", default="localhost", help="Host for the backend server (default: localhost)"
+        "--backend-host", default="127.0.0.1", help="Host for the backend server (default: 127.0.0.1)"
     )
     parser.add_argument(
         "--backend-port", default="5002", help="Port for the backend server (default: 5002)"
     )
     parser.add_argument(
-        "--sandbox-host", default="localhost", help="Host for the sandbox server (default: localhost)"
+        "--sandbox-host", default="127.0.0.1", help="Host for the sandbox server (default: 127.0.0.1)"
     )
     parser.add_argument(
         "--sandbox-port", default="2000", help="Port for the sandbox server (default: 2000)"

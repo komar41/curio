@@ -1,17 +1,23 @@
 """
-Persistent execution worker for the Curio sandbox.
+Execution worker for the Curio sandbox.
 
-Each worker process calls _worker_init() once to pre-load all heavy libraries,
-then reuses those imports on every execute_code() call — eliminating the
-~500-2000 ms cold-import cost that the old subprocess.Popen approach paid on
-every single node execution.
+_worker_init() is called once at sandbox startup to pre-load all heavy imports
+into _globals_cache. execute_code() then runs user code in-process using those
+cached imports — no subprocess spawning, no IPC overhead.
+
+Thread safety: _exec_lock serializes calls because contextlib.redirect_stdout
+mutates the global sys.stdout, and os.chdir is process-wide. Both are restored
+after each call via a finally block. For a single-user tool this is acceptable.
 """
 
+import threading
+
 _globals_cache: dict = {}
+_exec_lock = threading.Lock()
 
 
 def _worker_init():
-    """Called once per worker by ProcessPoolExecutor(initializer=_worker_init)."""
+    """Load all heavy imports once. Called at sandbox startup."""
     global _globals_cache
 
     import warnings
@@ -57,50 +63,54 @@ def _worker_init():
     }
 
 
-def execute_code(code, file_path, node_type, data_type, launch_dir):
+def execute_code(code, file_path, node_type, data_type, launch_dir=None):
     """
-    Execute user code inside the pre-warmed worker process.
+    Execute user code in-process using pre-loaded library globals.
 
-    Returns a dict: {'stdout': [str, ...], 'stderr': str, 'output': {'path': str, 'dataType': str}}
+    Returns {'stdout': [str, ...], 'stderr': str, 'output': {'path': str, 'dataType': str}}
     """
     import io as _io
     import os
+    import sys
+    import time
     import contextlib
     import traceback
 
     load_from_duckdb = _globals_cache['load_from_duckdb']
-    save_to_duckdb = _globals_cache['save_to_duckdb']
-    detect_kind = _globals_cache['detect_kind']
-    checkIOType = _globals_cache['checkIOType']
+    save_to_duckdb   = _globals_cache['save_to_duckdb']
+    detect_kind      = _globals_cache['detect_kind']
+    checkIOType      = _globals_cache['checkIOType']
 
-    original_dir = os.getcwd()
-    try:
-        os.chdir(launch_dir)
+    # _exec_lock serializes sys.stdout mutation and os.chdir.
+    with _exec_lock:
+        t0 = time.perf_counter()
+        original_dir = os.getcwd()
+        if launch_dir:
+            os.chdir(launch_dir)
 
         captured_stdout = _io.StringIO()
         captured_stderr = _io.StringIO()
         result = {'path': '', 'dataType': 'str'}
+        t_load = t_code = t_save = t0
 
         try:
             with contextlib.redirect_stdout(captured_stdout), \
                  contextlib.redirect_stderr(captured_stderr):
 
-                # Build a fresh namespace from pre-loaded globals so user-defined
-                # names don't leak between executions in the same worker.
+                # Fresh namespace per call — prevents name leakage between executions.
                 ns = dict(_globals_cache)
-
-                # Define the user's function in the fresh namespace.
                 exec(f"def userCode(arg):\n{code}", ns)
 
                 # Load input from DuckDB.
                 input_data = ''
                 if data_type == 'outputs':
-                    file_path_list = eval(file_path, {'__builtins__': {}})  # safe: only literals
+                    file_path_list = eval(file_path, {'__builtins__': {}})
                     input_data = [load_from_duckdb(elem['path']) for elem in file_path_list]
                 elif file_path:
                     input_data = load_from_duckdb(file_path)
+                t_load = time.perf_counter()
 
-                # Validate input and build incomingInput.
+                # Validate and prepare input.
                 incomingInput = None
                 if input_data is not None and not (isinstance(input_data, str) and input_data == ''):
                     if data_type == 'outputs':
@@ -117,6 +127,7 @@ def execute_code(code, file_path, node_type, data_type, launch_dir):
 
                 # Run user code.
                 output = ns['userCode'](incomingInput)
+                t_code = time.perf_counter()
 
                 # Validate output.
                 out_kind = detect_kind(output)
@@ -132,16 +143,24 @@ def execute_code(code, file_path, node_type, data_type, launch_dir):
                 # Save output to DuckDB.
                 result_path = save_to_duckdb(output, node_id=node_type)
                 result = {'path': result_path, 'dataType': out_kind}
+                t_save = time.perf_counter()
 
-        except Exception:
+        except BaseException:
             captured_stderr.write(traceback.format_exc())
 
-        stdout_lines = [l for l in captured_stdout.getvalue().split('\n') if l]
+        finally:
+            os.chdir(original_dir)
+            t1 = time.perf_counter()
+            print(
+                f"[exec] load={t_load-t0:.3f}s  code={t_code-t_load:.3f}s"
+                f"  save={t_save-t_code:.3f}s  total={t1-t0:.3f}s",
+                file=sys.__stderr__,
+                flush=True,
+            )
+
+        stdout_lines = [line for line in captured_stdout.getvalue().split('\n') if line]
         return {
             'stdout': stdout_lines,
             'stderr': captured_stderr.getvalue(),
             'output': result,
         }
-
-    finally:
-        os.chdir(original_dir)

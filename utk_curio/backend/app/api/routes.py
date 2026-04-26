@@ -1,6 +1,8 @@
 from flask import request, abort, jsonify, g
 import requests
 import json
+
+_sandbox_session = requests.Session()
 import sqlite3
 from utk_curio.backend.extensions import db
 from utk_curio.backend.app.users.models import User, UserSession
@@ -24,11 +26,9 @@ from openai import OpenAI
 # The Flask app
 from utk_curio.backend.app.api import bp
 
-#DuckDB parsers
-from utk_curio.sandbox.util.parsers import load_from_duckdb, parseOutput
 
 # Sandbox address
-api_address='http://'+os.getenv('FLASK_SANDBOX_HOST', 'localhost')
+api_address='http://'+os.getenv('FLASK_SANDBOX_HOST', '127.0.0.1')
 api_port=int(os.getenv('FLASK_SANDBOX_PORT', 2000))
 
 conversation = {}
@@ -239,7 +239,7 @@ def upload_file():
     if file.filename == '':
         return 'No selected file'
     
-    response = requests.post(api_address+":"+str(api_port)+"/upload", files={'file': file}, data={'fileName': file.filename}, timeout=60)
+    response = _sandbox_session.post(api_address+":"+str(api_port)+"/upload", files={'file': file}, data={'fileName': file.filename}, timeout=60)
 
     if response.status_code == 200:
         return 'File uploaded successfully'
@@ -283,9 +283,13 @@ def get_file():
 
     try:
         t0 = time.perf_counter()
-        raw = load_from_duckdb(file_name)
-        data = parseOutput(raw)
-        data['filename'] = file_name 
+        resp = _sandbox_session.get(
+            api_address + ":" + str(api_port) + "/get",
+            params={"fileName": file_name},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
         if vega:
             data = transform_to_vega(data)
         print(f"[/get] id={file_name} took={time.perf_counter()-t0:.4f}s", flush=True)
@@ -352,22 +356,13 @@ def get_file_preview():
 
     try:
         t0 = time.perf_counter()
-        raw = load_from_duckdb(file_name)
-
-        total_rows = None
-        # gpd.GeoDataFrame is a subclass of pd.DataFrame, so this catches both
-        if isinstance(raw, pd.DataFrame):
-            total_rows = len(raw)
-            raw = raw.head(max_rows)
-
-        data = parseOutput(raw)
-        data['filename'] = file_name 
-
-        if total_rows is not None:
-            data['preview'] = True
-            data['previewRows'] = min(max_rows, total_rows)
-            data['totalRows'] = total_rows
-
+        resp = _sandbox_session.get(
+            api_address + ":" + str(api_port) + "/get",
+            params={"fileName": file_name, "maxRows": max_rows},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
         print(f"[/get-preview] id={file_name} took={time.perf_counter()-t0:.4f}s", flush=True)
         return jsonify(data), 200
 
@@ -510,6 +505,8 @@ def create_preview_data(data, max_rows=100):
 
 @bp.route('/processPythonCode', methods=['POST'])
 def process_python_code():
+    import time as _time
+    t0 = _time.perf_counter()
 
     code = request.json['code']
     nodeType = request.json['nodeType']
@@ -517,59 +514,62 @@ def process_python_code():
     if(request.json.get('input')):
         req_input = request.json['input']
         if(req_input['dataType'] == 'outputs' and 'data' in req_input):
-            # Multiple outputs from a MergeFlowNode: 'data' is a list of output objects
             input['path'] = req_input['data']
             input['dataType'] = 'outputs'
         elif('filename' in req_input):
-            # Single file reference — load from file; the file itself embeds the real dataType.
-            # Avoid passing 'outputs' here so the wrapper loads the file normally via load_memory_mapped_file.
             input['path'] = req_input['filename']
             input['dataType'] = req_input['dataType'] if req_input['dataType'] != 'outputs' else 'file'
         elif('path' in req_input):
             input['path'] = req_input['path']
             input['dataType'] = req_input['dataType'] if req_input['dataType'] != 'outputs' else 'file'
-    try:
-        response = requests.post(api_address+":"+str(api_port)+"/exec",
-                                data=json.dumps({
-                                    "code": code,
-                                    "file_path": input['path'],
-                                    "nodeType": nodeType,
-                                    "dataType": input['dataType']
-                                }),
-                                headers={"Content-Type": "application/json"},
-                                timeout=120)
-        
-        try:
-            try:
-                response_json = response.json()
-            except Exception as e:
-                print(f"[processPythonCode] sandbox /exec returned non-JSON: "
-                  f"status={response.status_code} "
-                  f"body={response.text[:500]!r}", flush=True)
-                return {
-                    'stdout': '',
-                    'stderr': f'Sandbox error: {e}',
-                    'input': input,
-                    'output': {}
-                }, 500
 
-            stdout = response_json['stdout']
-            stderr = response_json['stderr']
-            output = response_json['output'] # contains path and dataType
-            print(output, flush=True)
-            
-            return {'stdout': stdout, 'stderr': stderr, 'input': input, 'output': output}
-        finally:
-            pass
-    finally:
-        pass
+    t1 = _time.perf_counter()
+    response = _sandbox_session.post(api_address+":"+str(api_port)+"/exec",
+                            data=json.dumps({
+                                "code": code,
+                                "file_path": input['path'],
+                                "nodeType": nodeType,
+                                "dataType": input['dataType']
+                            }),
+                            headers={"Content-Type": "application/json"},
+                            timeout=120)
+    t2 = _time.perf_counter()
+
+    try:
+        response_json = response.json()
+    except Exception as e:
+        print(f"[processPythonCode] sandbox /exec returned non-JSON: "
+              f"status={response.status_code} "
+              f"body={response.text[:500]!r}", flush=True)
+        return {
+            'stdout': '',
+            'stderr': f'Sandbox error: {e}',
+            'input': input,
+            'output': {}
+        }, 500
+
+    stdout = response_json['stdout']
+    stderr = response_json['stderr']
+    output = response_json['output']
+
+    t3 = _time.perf_counter()
+    print(
+        f"[backend /processPythonCode] parse={t1-t0:.3f}s"
+        f"  sandbox_rtt={t2-t1:.3f}s"
+        f"  json={t3-t2:.3f}s"
+        f"  total={t3-t0:.3f}s"
+        f"  node={nodeType}",
+        flush=True,
+    )
+
+    return {'stdout': stdout, 'stderr': stderr, 'input': input, 'output': output}
 
 
 @bp.route('/installPackages', methods=['POST'])
 def install_packages():
     packages = request.json.get('packages', [])
     try:
-        response = requests.post(
+        response = _sandbox_session.post(
             api_address + ":" + str(api_port) + "/install",
             data=json.dumps({"packages": packages}),
             headers={"Content-Type": "application/json"},
@@ -590,7 +590,7 @@ def toLayers():
             gpd.GeoDataFrame.from_features(geojson['features'])
     except Exception as e:
         print("GeoPandas validation failed:", e)
-    response = requests.post(api_address+":"+str(api_port)+"/toLayers",
+    response = _sandbox_session.post(api_address+":"+str(api_port)+"/toLayers",
                              data=json.dumps({
                                  "geojsons": request.json['geojsons']
                              }),
@@ -1178,6 +1178,10 @@ def node_exec_prov():
     cursor.execute("SELECT activity_id, input_relation_id, output_relation_id FROM activity WHERE workflow_id = ? AND activity_name = ?", (workflow[0], data['activity_name'],))
     activity = cursor.fetchone()
 
+    if activity is None:
+        conn.close()
+        return jsonify({'error': f"Activity '{data['activity_name']}' not found in workflow '{data['workflow_name']}'"}), 404
+
     # creating new workflow execution
 
     if(data['interaction'] == True):
@@ -1315,9 +1319,17 @@ def get_node_graph():
     cursor.execute("SELECT workflow_id FROM workflow WHERE workflow_id = (SELECT MAX(workflow_id) FROM workflow WHERE workflow_name = ?)", (data['workflow_name'],))
     workflow = cursor.fetchone()
 
+    if workflow is None:
+        conn.close()
+        return jsonify({'error': f"Workflow '{data['workflow_name']}' not found"}), 404
+
     # activity
     cursor.execute("SELECT activity_id FROM activity WHERE workflow_id = ? AND activity_name = ?", (workflow[0], data['activity_name'],))
     activity = cursor.fetchone()
+
+    if activity is None:
+        conn.close()
+        return jsonify({'error': f"Activity '{data['activity_name']}' not found in workflow '{data['workflow_name']}'"}), 404
 
     # all the executions of this activity in the order they were executed
     cursor.execute("SELECT activityexec_id, input_ri_id, output_ri_id, activity_source_code FROM activityExecution WHERE activity_id = ? ORDER BY activityexec_id ASC", (activity[0],))

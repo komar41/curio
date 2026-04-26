@@ -17,7 +17,7 @@ from pathlib import Path
 #DuckDB imports:
 import io
 import duckdb
-from utk_curio.sandbox.util.db import get_connection, init_db
+from utk_curio.sandbox.util.db import get_connection, get_read_connection, init_db
 
 # Utility Functions
 # transforms the whole input into a dict (json) in depth
@@ -593,7 +593,9 @@ def load_from_duckdb(art_id):
     import time as _time
     t_start = _time.perf_counter()
 
-    con = get_connection()
+    # Reuse the persistent R/W connection (sandbox) or open a fresh R/O connection
+    # (backend) — avoids conflicting connection modes on the same file.
+    con = get_read_connection()
     try:
         row = con.execute(
             "SELECT kind, value_int, value_float, value_str, value_json, blob "
