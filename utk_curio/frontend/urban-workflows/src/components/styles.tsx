@@ -668,12 +668,6 @@ export const NodeContainer = ({
                             />
                         ) : null}
                         <FontAwesomeIcon
-                            icon={faCircleInfo}
-                            style={{ ...headerIconStyle, ...(data.keywordHighlighted ? {color: "rgb(251, 252, 246)"} : {}) }}
-                            title="Details"
-                            onClick={() => promptDescription()}
-                        />
-                        <FontAwesomeIcon
                             icon={pinnedToDashboard ? faCircleDot : faCircle}
                             style={{
                                 ...headerIconStyle,
