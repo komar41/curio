@@ -82,6 +82,22 @@ export class TrillGenerator {
 
     }
 
+    static getSerializableDataflowProvenance(): any {
+        return {
+            id: TrillGenerator.provenanceJSON.id,
+            latest: TrillGenerator.latestTrill,
+            graph: TrillGenerator.provenanceJSON,
+            versions: TrillGenerator.list_of_trills,
+        };
+    }
+
+    static loadDataflowProvenance(data: any): void {
+        if (!data) return;
+        TrillGenerator.provenanceJSON = data.graph || { id: "", nodes: [], edges: [] };
+        TrillGenerator.latestTrill = data.latest || "";
+        TrillGenerator.list_of_trills = data.versions || {};
+    }
+
     static generateTrill(nodes: any, edges: any, name: string, task: string = "", packages: string[] = []){
 
         let trill = {

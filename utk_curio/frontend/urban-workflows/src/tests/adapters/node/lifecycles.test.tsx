@@ -21,7 +21,15 @@ jest.mock('../../../hook/useUTK', () => ({
 
 
 jest.mock('../../../providers/ProvenanceProvider', () => ({
-  useProvenanceContext: () => ({ nodeExecProv: jest.fn() }),
+  useProvenanceContext: () => ({
+    nodeExecProv: jest.fn(),
+    provenanceGraphNodes: {},
+    provenanceGraphNodesRef: { current: {} },
+    selectedParentExecRef: { current: {} },
+    setSelectedExec: jest.fn(),
+    loadNodeProvenance: jest.fn(),
+    getAllNodeProvenance: jest.fn(() => ({})),
+  }),
 }));
 
 jest.mock('../../../providers/FlowProvider', () => ({

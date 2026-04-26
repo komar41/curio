@@ -271,6 +271,7 @@ function NodeEditor({
                                             data={data}
                                             nodeType={nodeType}
                                             setCode={navigateProv}
+                                            active={activeTab === "provenance"}
                                         />
                                     </Tab.Pane>
                                 ) : null}

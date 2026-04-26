@@ -24,7 +24,6 @@ import {
 } from "reactflow";
 import { ConnectionValidator } from "../ConnectionValidator";
 import { NodeType, EdgeType } from "../constants";
-import { useProvenanceContext } from "./ProvenanceProvider";
 import { TrillGenerator } from "../TrillGenerator";
 import { applyDashboardLayout } from "../utils/dashboardLayout";
 import { ensureMergeArrays, parseHandleIndex, setMergeSlot, clearMergeSlot } from "../utils/mergeFlowUtils";
@@ -302,9 +301,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const reactFlow = useReactFlow();
-    const { newNode, addWorkflow, deleteNode, newConnection, deleteConnection } =
-        useProvenanceContext();
-
     const [loading, setLoading] = useState<boolean>(false);
 
     const [workflowName, _setWorkflowName] = useState<string>("DefaultDataflow");
@@ -314,10 +310,9 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         _setWorkflowName(data);
     }, []);
 
-    const initializeProvenance = async () => {
+    const initializeProvenance = () => {
         setLoading(true);
         try {
-            await addWorkflow(workflowNameRef.current);
             const empty_trill = TrillGenerator.generateTrill(
                 [],
                 [],
@@ -425,8 +420,13 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 return prev.concat(node);
             });
 
-            if (provenance) // If there should be provenance tracking
-                newNode((customWorkflowName ? customWorkflowName : workflowNameRef.current), (node.type as string) + "-" + node.id);
+            if (provenance) {
+                TrillGenerator.addNewVersionProvenance(
+                    [...reactFlow.getNodes(), node],
+                    reactFlow.getEdges(),
+                    workflowNameRef.current, "", "Node added"
+                );
+            }
         },
         [setNodes]
     );
@@ -486,10 +486,10 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     connection.sourceHandle != "in/out" &&
                     connection.targetHandle != "in/out"
                 ) {
-                    deleteConnection(
-                        workflowNameRef.current,
-                        targetNode.id,
-                        targetNode.type as NodeType
+                    TrillGenerator.addNewVersionProvenance(
+                        reactFlow.getNodes(),
+                        reactFlow.getEdges().filter((e: Edge) => e.id !== connection.id),
+                        workflowNameRef.current, "", "Connection deleted"
                     );
                 }
 
@@ -540,12 +540,16 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 if (change.type === "remove" && 'id' in change) {
                     const node = reactFlow.getNode(change.id) as Node;
                     if (node) {
-                        deleteNode(workflowNameRef.current, node.type + "_" + node.id);
+                        TrillGenerator.addNewVersionProvenance(
+                            reactFlow.getNodes().filter((n: Node) => n.id !== change.id),
+                            reactFlow.getEdges(),
+                            workflowNameRef.current, "", "Node deleted"
+                        );
                     }
                 }
             }
         },
-        [setOutputs, reactFlow, deleteNode]
+        [setOutputs, reactFlow]
     );
 
     const onConnect = useCallback(
@@ -695,13 +699,10 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                         } else {
                             customConnection.type = EdgeType.UNIDIRECTIONAL_EDGE;
 
-                            if (true)  //Changed provenance to always persist connections; monitor for potential side effects.
-                                newConnection(
-                                    (custom_workflow ? custom_workflow : workflowNameRef.current),
-                                    customConnection.source,
-                                    outNodeType as NodeType,
-                                    customConnection.target,
-                                    inNodeType as NodeType
+                            TrillGenerator.addNewVersionProvenance(
+                                    reactFlow.getNodes(),
+                                    [...reactFlow.getEdges(), customConnection],
+                                    workflowNameRef.current, "", "Connection added"
                                 );
                         }
 

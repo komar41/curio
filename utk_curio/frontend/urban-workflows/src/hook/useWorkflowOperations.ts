@@ -57,7 +57,7 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
 
     const reactFlow = useReactFlow();
     const nodesInitialized = useNodesInitialized();
-    const { newNode, addWorkflow } = useProvenanceContext();
+    const { getAllNodeProvenance } = useProvenanceContext();
     const { showToast } = useToastContext();
 
     // fitViewOnLoad is internal to workflow loading
@@ -176,7 +176,6 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
         if (!merge) {
             TrillGenerator.reset();
             setWorkflowName(workflowName);
-            await addWorkflow(workflowName);
             const empty_trill = TrillGenerator.generateTrill([], [], workflowName);
             TrillGenerator.intializeProvenance(empty_trill);
             setPackages(incomingPackages || []);
@@ -396,8 +395,6 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
                     acceptedConnectionSuggestionId = node.id;
                 }
 
-                newNode(workflowNameRef.current, (node.type as string) + "-" + node.id);
-
                 return {
                     ...node,
                     data: { ...node.data, suggestionAcceptable: false, suggestionType: "none" },
@@ -433,7 +430,7 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
 
             return filteredNodes;
         });
-    }, [setNodes, setEdges, newNode, workflowNameRef]);
+    }, [setNodes, setEdges, workflowNameRef]);
 
     // If keywordIndex is undefined all components are unflagged
     const flagBasedOnKeyword = (keywordIndex?: number) => {
@@ -508,7 +505,9 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
     const saveCurrentProject = useCallback(async (nameOverride?: string) => {
         const currentNodes = reactFlow.getNodes();
         const currentEdges = reactFlow.getEdges();
-        const spec = TrillGenerator.generateTrill(currentNodes, currentEdges, workflowNameRef.current);
+        const spec: any = TrillGenerator.generateTrill(currentNodes, currentEdges, workflowNameRef.current);
+        spec.nodeProvenance = getAllNodeProvenance();
+        spec.dataflowProvenance = TrillGenerator.getSerializableDataflowProvenance();
 
         const outputRefs: OutputRef[] = buildOutputRefs();
 
@@ -540,7 +539,9 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
     const saveAsNewProject = useCallback(async (name: string) => {
         const currentNodes = reactFlow.getNodes();
         const currentEdges = reactFlow.getEdges();
-        const spec = TrillGenerator.generateTrill(currentNodes, currentEdges, workflowNameRef.current);
+        const spec: any = TrillGenerator.generateTrill(currentNodes, currentEdges, workflowNameRef.current);
+        spec.nodeProvenance = getAllNodeProvenance();
+        spec.dataflowProvenance = TrillGenerator.getSerializableDataflowProvenance();
 
         const outputRefs: OutputRef[] = buildOutputRefs();
 

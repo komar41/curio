@@ -3,7 +3,9 @@ import { Node } from "reactflow";
 import { v4 as uuid } from "uuid";
 
 import { IInteraction, useFlowContext } from "../providers/FlowProvider";
+import { useProvenanceContext } from "../providers/ProvenanceProvider";
 import { PythonInterpreter } from "../PythonInterpreter";
+import { TrillGenerator } from "../TrillGenerator";
 import { usePosition } from "./usePosition";
 import { AccessLevelType, NodeType, EdgeType } from "../constants";
 
@@ -35,6 +37,7 @@ interface IUseCode {
 
 export function useCode(): IUseCode {
     const { addNode, setOutputs, setInteractions, applyNewPropagation, applyNewOutput, loadParsedTrill } = useFlowContext();
+    const { loadNodeProvenance } = useProvenanceContext();
     const { getPosition } = usePosition();
 
     const outputCallback = useCallback(
@@ -177,7 +180,15 @@ export function useCode(): IUseCode {
         else if(suggestionType == "workflow")
             loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true); // if loading as suggestion deactivate provenance and merge
         else
-            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true); 
+            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true);
+
+        if (trill.nodeProvenance) {
+            loadNodeProvenance(trill.nodeProvenance);
+        }
+
+        if (trill.dataflowProvenance) {
+            TrillGenerator.loadDataflowProvenance(trill.dataflowProvenance);
+        }
 
     }
 

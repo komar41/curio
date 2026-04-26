@@ -13,7 +13,6 @@ import {
   UserData,
 } from "../utils/authApi";
 import { Loading } from "../components/login/Loading";
-import { useProvenanceContext } from "./ProvenanceProvider";
 
 interface UserProviderProps {
   user: UserData | null;
@@ -72,8 +71,6 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
     process.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ""
   );
 
-  const { addUser } = useProvenanceContext();
-
   const applyUser = useCallback((nextUser: UserData) => {
     setUser(nextUser);
     return nextUser;
@@ -82,11 +79,9 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const handleAuth = useCallback(
     (res: { user: UserData; token: string }) => {
       setToken(res.token);
-      const nextUser = applyUser(res.user);
-      addUser(nextUser.name, nextUser.type || "", "");
-      return nextUser;
+      return applyUser(res.user);
     },
-    [addUser, applyUser]
+    [applyUser]
   );
 
   useEffect(() => {
