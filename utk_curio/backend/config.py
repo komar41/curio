@@ -43,6 +43,11 @@ CURIO_SHARED_GUEST_NAME = os.environ.get(
 
 CURIO_PROJECT_EXEC_CACHE = _env_flag("CURIO_PROJECT_EXEC_CACHE", False)
 
+GUEST_LLM_API_TYPE = os.environ.get("GUEST_LLM_API_TYPE", "openai_compatible")
+GUEST_LLM_BASE_URL = os.environ.get("GUEST_LLM_BASE_URL", "")
+GUEST_LLM_API_KEY = os.environ.get("GUEST_LLM_API_KEY", "")
+GUEST_LLM_MODEL = os.environ.get("GUEST_LLM_MODEL", "gpt-4o-mini")
+
 
 def _is_dev() -> bool:
     """True when the backend is NOT running in production.

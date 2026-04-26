@@ -21,7 +21,68 @@ from pathlib import Path
 import re
 import pandas as pd
 import geopandas as gpd
-from openai import OpenAI
+from utk_curio.backend.config import (
+    GUEST_LLM_API_TYPE,
+    GUEST_LLM_BASE_URL,
+    GUEST_LLM_API_KEY,
+    GUEST_LLM_MODEL,
+)
+
+
+def _resolve_llm_config():
+    """Return (api_key, api_type, base_url, model) for the current authenticated user."""
+    user = g.user
+    if user.is_guest:
+        if not GUEST_LLM_API_KEY:
+            abort(400, description="LLM is not available for guest users at this time.")
+        return GUEST_LLM_API_KEY, GUEST_LLM_API_TYPE, GUEST_LLM_BASE_URL, GUEST_LLM_MODEL
+    if not user.llm_model:
+        abort(400, description="No LLM configured. Set your provider and model in the Projects page.")
+    return (
+        user.llm_api_key or "",
+        user.llm_api_type or "openai_compatible",
+        user.llm_base_url or "",
+        user.llm_model,
+    )
+
+
+def _call_llm(api_key: str, api_type: str, base_url: str, model: str, messages: list) -> str:
+    """Dispatch an LLM chat completion to the configured provider."""
+    if api_type == "anthropic":
+        import anthropic
+        system_parts = [m["content"] for m in messages if m["role"] == "system"]
+        chat_messages = [m for m in messages if m["role"] != "system"]
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model=model,
+            system="\n".join(system_parts) if system_parts else anthropic.NOT_GIVEN,
+            messages=chat_messages,
+            max_tokens=4096,
+        )
+        return resp.content[0].text
+    elif api_type == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        system_parts = [m["content"] for m in messages if m["role"] == "system"]
+        chat_messages = [m for m in messages if m["role"] != "system"]
+        history = []
+        for m in chat_messages[:-1]:
+            role = "user" if m["role"] == "user" else "model"
+            history.append({"role": role, "parts": [m["content"]]})
+        last_user_msg = chat_messages[-1]["content"] if chat_messages else ""
+        system_instruction = "\n".join(system_parts) if system_parts else None
+        gen_model = genai.GenerativeModel(model, system_instruction=system_instruction)
+        chat = gen_model.start_chat(history=history)
+        response = chat.send_message(last_user_msg)
+        return response.text
+    else:  # openai_compatible (default)
+        from openai import OpenAI
+        kwargs = {"api_key": api_key or "no-key"}
+        if base_url:
+            kwargs["base_url"] = base_url
+        client = OpenAI(**kwargs)
+        completion = client.chat.completions.create(model=model, messages=messages)
+        return completion.choices[0].message.content
 
 # The Flask app
 from utk_curio.backend.app.api import bp
@@ -1785,8 +1846,9 @@ def get_loaded_files_metadata(folder_path):
 
     return metadata
 
-@bp.route('/openAI', methods=['POST'])
-def llm_openaAI():
+@bp.route('/llm/chat', methods=['POST'])
+@require_auth
+def llm_chat():
     global conversation
 
     data = request.get_json()
@@ -1798,7 +1860,7 @@ def llm_openaAI():
 
     past_conversation = []
 
-    if chatId != None and chatId in conversation:
+    if chatId is not None and chatId in conversation:
         past_conversation = conversation[chatId]
 
     prompt_preamble_file = open("./llm-prompts/"+preamble_file+".txt")
@@ -1813,44 +1875,33 @@ def llm_openaAI():
     prompt_file_obj = open("./llm-prompts/"+prompt_file+".txt")
     prompt_text = prompt_file_obj.read()
 
-    if len(past_conversation) == 0: # Adding the prompt to the conversation
+    if len(past_conversation) == 0:
         past_conversation.append({"role": "system", "content": prompt_preamble + "\n" + prompt_text})
 
-    api_file = open("api.env")
-    api_key = api_file.read()
-
-    client = OpenAI(
-        api_key=api_key
-    )
-    
     past_conversation.append({"role": "user", "content": text})
 
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        store=True,
-        messages=past_conversation
-    )
-
-    # completion = client.chat.completions.create(
-    #     model="o3-mini",
-    #     store=True,
-    #     messages=past_conversation
-    # )
-
-    assistant_reply = completion.choices[0].message.content
+    api_key, api_type, base_url, model = _resolve_llm_config()
+    assistant_reply = _call_llm(api_key, api_type, base_url, model, past_conversation)
 
     past_conversation.append({"role": "assistant", "content": assistant_reply})
 
-    if chatId != None: # User want to save chat
+    if chatId is not None:
         conversation[chatId] = past_conversation
 
-    return jsonify({"result": completion.choices[0].message.content})
+    return jsonify({"result": assistant_reply})
 
-@bp.route('/checkUsageOpenAI', methods=['POST'])
-def check_usage_OpenAI():
+@bp.route('/llm/check', methods=['POST'])
+@require_auth
+def llm_check():
     global conversation
     global tokens_left
     global last_refresh
+
+    # Non-openai_compatible providers don't have a per-minute token budget.
+    user = g.user
+    api_type = (user.llm_api_type if not user.is_guest else GUEST_LLM_API_TYPE) or "openai_compatible"
+    if api_type != "openai_compatible":
+        return jsonify({"result": "yes"})
 
     data = request.get_json()
 
@@ -1861,10 +1912,8 @@ def check_usage_OpenAI():
 
     past_conversation = []
 
-    if chatId != None and chatId in conversation:
+    if chatId is not None and chatId in conversation:
         past_conversation = conversation[chatId]
-
-    print("Current dir", os.getcwd())
 
     prompt_preamble_file = open("./llm-prompts/"+preamble_file+".txt")
     prompt_preamble = prompt_preamble_file.read()
@@ -1872,7 +1921,7 @@ def check_usage_OpenAI():
     prompt_file_obj = open("./llm-prompts/"+prompt_file+".txt")
     prompt_text = prompt_file_obj.read()
 
-    if len(past_conversation) == 0: # Adding the prompt to the conversation
+    if len(past_conversation) == 0:
         past_conversation.append({"role": "system", "content": prompt_preamble + "\n" + prompt_text})
 
     past_conversation.append({"role": "user", "content": text})
@@ -1880,29 +1929,27 @@ def check_usage_OpenAI():
     total_tokens = 0
 
     for message in past_conversation:
-        total_tokens += len(message["content"].split()) * 1.5 # estimating the number of tokens
-
-    print("total_tokens", total_tokens)
-    print("tokens_left", tokens_left)
+        total_tokens += len(message["content"].split()) * 1.5
 
     now_time = time.time()
 
-    if((now_time - last_refresh) >= 60): # One minute passed
+    if (now_time - last_refresh) >= 60:
         tokens_left = 200000
 
-    if(tokens_left > total_tokens):
+    if tokens_left > total_tokens:
         tokens_left -= total_tokens
         return jsonify({"result": "yes"})
-    
+
     return jsonify({"result": (60 - (now_time - last_refresh))})
 
-@bp.route('/cleanOpenAIChat', methods=['GET'])
-def clean_openai_chat():
+@bp.route('/llm/clean', methods=['GET'])
+@require_auth
+def llm_clean():
     global conversation
 
     chatId = request.args.get('chatId', None)
 
-    if chatId == None:
+    if chatId is None:
         return jsonify({"message": "You need to specify which chatId is being cleaned"}), 400
 
     conversation[chatId] = []

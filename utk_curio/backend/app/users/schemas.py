@@ -54,6 +54,10 @@ class UserOut:
     profile_image: Optional[str]
     type: Optional[str]
     is_guest: bool
+    has_llm_api_key: bool
+    llm_api_type: Optional[str]
+    llm_base_url: Optional[str]
+    llm_model: Optional[str]
 
     def to_dict(self) -> dict:
         return {
@@ -64,6 +68,10 @@ class UserOut:
             "profile_image": self.profile_image,
             "type": self.type,
             "is_guest": self.is_guest,
+            "has_llm_api_key": self.has_llm_api_key,
+            "llm_api_type": self.llm_api_type,
+            "llm_base_url": self.llm_base_url,
+            "llm_model": self.llm_model,
         }
 
 
@@ -81,3 +89,7 @@ class UserPatchIn:
     name: Optional[str] = None
     email: Optional[str] = None
     type: Optional[str] = None
+    llm_api_type: Optional[str] = None
+    llm_base_url: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_model: Optional[str] = None

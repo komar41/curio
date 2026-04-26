@@ -36,6 +36,10 @@ def _user_out(u: User) -> UserOut:
         profile_image=u.profile_image,
         type=u.type,
         is_guest=u.is_guest,
+        has_llm_api_key=bool(u.llm_api_key),
+        llm_api_type=u.llm_api_type,
+        llm_base_url=u.llm_base_url,
+        llm_model=u.llm_model,
     )
 
 
@@ -164,5 +168,16 @@ def patch_me(user: User, data: UserPatchIn) -> UserOut:
         user.email = data.email if data.email else None
     if data.type is not None:
         user.type = data.type
+    if data.llm_api_key is not None:
+        if user.is_guest:
+            raise AuthError("Guest users cannot set an API key.", 403)
+        user.llm_api_key = data.llm_api_key if data.llm_api_key else None
+    if not user.is_guest:
+        if data.llm_api_type is not None:
+            user.llm_api_type = data.llm_api_type if data.llm_api_type else None
+        if data.llm_base_url is not None:
+            user.llm_base_url = data.llm_base_url if data.llm_base_url else None
+        if data.llm_model is not None:
+            user.llm_model = data.llm_model if data.llm_model else None
     db.session.commit()
     return _user_out(user)

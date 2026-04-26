@@ -156,9 +156,16 @@ def me_patch_route():
         name=body.get("name"),
         email=body.get("email"),
         type=body.get("type"),
+        llm_api_type=body.get("llm_api_type"),
+        llm_base_url=body.get("llm_base_url"),
+        llm_api_key=body.get("llm_api_key"),
+        llm_model=body.get("llm_model"),
     )
-    user_out = patch_me(g.user, data)
-    return jsonify(user_out.to_dict()), 200
+    try:
+        user_out = patch_me(g.user, data)
+        return jsonify(user_out.to_dict()), 200
+    except AuthError as e:
+        return jsonify({"error": e.message}), e.status
 
 
 @config_bp.route("/public", methods=["GET"])

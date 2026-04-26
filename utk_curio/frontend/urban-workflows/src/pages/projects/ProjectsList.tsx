@@ -6,6 +6,7 @@ import { projectsApi, ProjectSummary } from "../../api/projectsApi";
 import { notebookToTrill } from "../../NotebookConvertor";
 import logo from "assets/curio-2.png";
 import DataflowThumbnail from "../../components/DataflowThumbnail";
+import LlmSettingsModal from "../../components/LlmSettingsModal";
 
 type ViewMode = "grid" | "list";
 type FilterTab = "all" | "recent" | "archived";
@@ -25,6 +26,7 @@ const ProjectsList: React.FC = () => {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [search, setSearch] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: ProjectSummary } | null>(null);
+  const [llmSettingsOpen, setLlmSettingsOpen] = useState(false);
   const importNotebookRef = useRef<HTMLInputElement>(null);
 
   const loadProjects = useCallback(async () => {
@@ -137,6 +139,9 @@ const ProjectsList: React.FC = () => {
           <img src={logo} alt="Curio" style={logoImgStyle} />
         </Link>
         <div style={topBarRightStyle}>
+          <button style={llmSettingsBtnStyle} onClick={() => setLlmSettingsOpen(true)}>
+            LLM Settings
+          </button>
           <div style={avatarStyle}>{initials}</div>
           <div style={userInfoColumnStyle}>
             <span style={userNameStyle}>{user?.name || "User"}</span>
@@ -153,6 +158,7 @@ const ProjectsList: React.FC = () => {
             )}
           </div>
         </div>
+        <LlmSettingsModal isOpen={llmSettingsOpen} onClose={() => setLlmSettingsOpen(false)} />
       </header>
 
       {/* Main Content */}
@@ -380,6 +386,18 @@ const signoutBtnStyle: CSS.Properties = {
   padding: "3px 10px",
   cursor: "pointer",
   lineHeight: 1.3,
+};
+
+const llmSettingsBtnStyle: CSS.Properties = {
+  background: "none",
+  border: "1px solid #444",
+  borderRadius: "4px",
+  color: "#ddd",
+  fontSize: "12px",
+  fontWeight: 500,
+  padding: "5px 12px",
+  cursor: "pointer",
+  marginRight: "12px",
 };
 
 const mainStyle: CSS.Properties = {

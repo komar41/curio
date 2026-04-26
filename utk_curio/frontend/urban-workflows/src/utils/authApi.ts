@@ -56,6 +56,10 @@ export interface UserData {
   profile_image: string | null;
   type: string | null;
   is_guest: boolean;
+  has_llm_api_key: boolean;
+  llm_api_type: string | null;
+  llm_base_url: string | null;
+  llm_model: string | null;
 }
 
 export interface PublicConfig {
@@ -118,6 +122,10 @@ export const authApi = {
     name?: string;
     email?: string;
     type?: string;
+    llm_api_type?: string;
+    llm_base_url?: string;
+    llm_api_key?: string;
+    llm_model?: string;
   }): Promise<UserData> {
     return apiFetch("/api/auth/me", {
       method: "PATCH",

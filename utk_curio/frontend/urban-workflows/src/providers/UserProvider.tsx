@@ -37,6 +37,12 @@ interface UserProviderProps {
     email?: string;
     type?: string;
   }) => Promise<void>;
+  updateLlmConfig: (config: {
+    apiType?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+  }) => Promise<void>;
   saveUserType: (newType: "programmer" | "expert") => Promise<void>;
   googleSignIn: (googleCode: string) => Promise<UserData | null>;
   logout: () => void;
@@ -56,6 +62,7 @@ export const UserContext = createContext<UserProviderProps>({
   signinWithGoogle: async () => null,
   signout: async () => {},
   updateProfile: async () => {},
+  updateLlmConfig: async () => {},
   saveUserType: async () => {},
   googleSignIn: async () => null,
   logout: () => {},
@@ -246,6 +253,24 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
     []
   );
 
+  const updateLlmConfig = useCallback(
+    async (config: {
+      apiType?: string;
+      baseUrl?: string;
+      apiKey?: string;
+      model?: string;
+    }) => {
+      const updated = await authApi.patchMe({
+        llm_api_type: config.apiType,
+        llm_base_url: config.baseUrl,
+        llm_api_key: config.apiKey,
+        llm_model: config.model,
+      });
+      setUser(updated);
+    },
+    []
+  );
+
   const saveUserType = useCallback(
     async (newType: "programmer" | "expert") => {
       await updateProfile({ type: newType });
@@ -269,6 +294,7 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
         signinWithGoogle,
         signout,
         updateProfile,
+        updateLlmConfig,
         saveUserType,
         googleSignIn: signinWithGoogle,
         logout: signout,
