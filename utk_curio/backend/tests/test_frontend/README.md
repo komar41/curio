@@ -1,6 +1,6 @@
 # Frontend E2E Tests
 
-See [CONTRIBUTIONS.md](../../../../docs/CONTRIBUTIONS.md#frontend-e2e-tests)
+See [CONTRIBUTING.md](../../../../docs/CONTRIBUTING.md#frontend-e2e-tests)
 for the repo-wide E2E workflow. Test-specific details live here.
 
 Playwright-based end-to-end tests that upload workflow JSON files into the Curio frontend and verify the ReactFlow canvas renders correctly.

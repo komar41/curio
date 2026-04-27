@@ -7,7 +7,7 @@
 
 ## Making contributions
 
-- [Contributing to Curio](CONTRIBUTIONS.md)
+- [Contributing to Curio](CONTRIBUTING.md)
 - [Onboarding for undergraduate students](ONBOARDING.md)
 
 ## Examples

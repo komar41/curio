@@ -1,6 +1,6 @@
 ## Database management
 
-See [CONTRIBUTIONS.md](../../docs/CONTRIBUTIONS.md#database-migrations) for
+See [CONTRIBUTING.md](../../docs/CONTRIBUTING.md#database-migrations) for
 repo-wide migration guidance. Backend-specific notes are below.
 
 - Create migration
