@@ -15,7 +15,7 @@ interface Props {
 const siblingLogos = [
   { src: urbaniteLogo, alt: "Urbanite", href: "https://urbantk.org/urbanite", label: "urbantk.org/urbanite", filter: "grayscale(1)" },
   { src: scoutLogo,    alt: "Scout",    href: "https://urbantk.org/scout",    label: "urbantk.org/scout",    filter: "grayscale(1)" },
-  { src: autarkLogo,   alt: "Autark",   href: "https://urbantk.org/autark",   label: "urbantk.org/autark",   filter: "brightness(0) invert(1)" },
+  { src: autarkLogo,   alt: "Autark",   href: "https://autarkjs.org",          label: "autarkjs.org",          filter: "brightness(0) invert(1)" },
 ];
 
 const footerLogos = [
