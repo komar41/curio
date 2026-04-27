@@ -33,7 +33,7 @@ import logo from "assets/curio-2.png";
 import { UserMenu } from "components/login/UserMenu";
 import introJs from "intro.js";
 import "intro.js/introjs.css";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useUserContext } from "../../../providers/UserProvider";
 
 export default function UpMenu({
@@ -330,9 +330,15 @@ export default function UpMenu({
                 className={clsx(styles.menuBar, "nowheel", "nodrag")}
                 ref={menuBarRef}
             >
-                <Link to="/projects" style={{ display: "contents" }}>
-                    <img className={styles.logo} src={logo} alt="Curio logo" />
-                </Link>
+                <img
+                    className={styles.logo}
+                    src={logo}
+                    alt="Curio logo"
+                    onClick={() => {
+                        if (projectDirty && !window.confirm("You have unsaved changes. Leaving will lose your work.")) return;
+                        navigate("/projects");
+                    }}
+                />
 
                 {/* File */}
                 <div className={styles.dropdownWrapper}>
