@@ -457,6 +457,7 @@ def start_backend(host, port, force_db_init=False, no_server=False):
 
 
 def start_sandbox(host, port):
+    _kill_port(int(port))
     log_info(f"Starting sandbox on {host}:{port}...", COLOR_SANDBOX, 0)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
